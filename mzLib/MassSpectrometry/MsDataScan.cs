@@ -62,12 +62,12 @@ namespace MassSpectrometry
         public MzSpectrum MassSpectrum { get; protected set; }
 
         public int OneBasedScanNumber { get; private set; }
-        public int MsnOrder { get; }
+        public int MsnOrder { get; set; }
         public double RetentionTime { get; }
         public Polarity Polarity { get; }
         public MZAnalyzerType MzAnalyzer { get; }
         public MzRange ScanWindowRange { get; }
-        public string ScanFilter { get; }
+        public string ScanFilter { get; set; }
         public string NativeId { get; private set; }
         public bool IsCentroid { get; }
         public double TotalIonCurrent { get; }
@@ -79,9 +79,9 @@ namespace MassSpectrometry
 
         public int? SelectedIonChargeStateGuess { get; }
         public double? SelectedIonIntensity { get; private set; } // May be refined
-        public double? SelectedIonMZ { get; private set; } // May be adjusted by calibration
+        public double? SelectedIonMZ { get; set; } // May be adjusted by calibration
         public DissociationType? DissociationType { get; }
-        public double? IsolationWidth { get; }
+        public double? IsolationWidth { get; set; }
         public int? OneBasedPrecursorScanNumber { get; private set; }
         public double? SelectedIonMonoisotopicGuessIntensity { get; private set; } // May be refined
         public double? SelectedIonMonoisotopicGuessMz { get; private set; } // May be refined
