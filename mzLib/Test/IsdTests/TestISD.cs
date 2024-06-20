@@ -21,34 +21,12 @@ namespace Test.IsdTests
 {
     internal class DataLoading
     {
-        [Test]
-        public void TestImportExport()
-        {
-            string path = @"E:\ISD Project\ISD_240305\EnhancedITMS1_ISD100.raw";
-            string path2 = @"E:\ISD Project\ISD_240305\EnhancedITMS1_ISD100.mzML";
-
-            var file = new ThermoRawFileReader(path);
-            var scansFull = file.GetAllScansList();
-
-            var ms1Scans = scansFull.GetMs1Scans();
-            // skip the first isfScan. Then interleave. /// why skip the first isdScan
-            var voltage = 100;
-            var isdScans = scansFull.GetISDScans(voltage).ToList();
-            var interleaved = ms1Scans.InterleaveScans(isdScans).ToList();
-
-            var results = interleaved.UpdateMs2MetaData().UpdateScanStringMetaData().ToArray();
-
-            SourceFile genericSourceFile = new SourceFile("no nativeID format", "mzML format",
-                null, null, null);
-            GenericMsDataFile msFile = new GenericMsDataFile(results, genericSourceFile);
-            msFile.ExportAsMzML(path2, false);
-        }
 
         [Test]
         public void TestImportExport2()
         {
-            string path = @"E:\ISD Project\ISD_240305\EnhancedITMS1_ISD100.raw";
-            string path2 = @"E:\ISD Project\ISD_240305\EnhancedITMS1_ISD100_2.mzML";
+            string path = @"E:\ISD Project\ISD_240606\06-11-24_mix_sample13_10uL_5pmol_ISD_IT.raw";
+            string path2 = @"E:\ISD Project\ISD_240606\06-11-24_mix_sample13_10uL_5pmol_ISD_IT.mzML";
 
             var file = new ThermoRawFileReader(path);
             var scansFull = file.GetAllScansList();
@@ -85,9 +63,10 @@ namespace Test.IsdTests
             while ((name = streamReader.ReadLine()) is not null)
             {
                 name = name.Trim();
-                string outputPath = @"E:\ISD Project\ISD_240305\" + name + ".mzML";
+                string folderName = @"ISD_240305\";
+                string outputPath = @"E:\ISD Project\" + folderName + name + ".mzML";
 
-                string inputPath = @"E:\ISD Project\ISD_240305\" + name +".raw";
+                string inputPath = @"E:\ISD Project\" + folderName + name +".raw";
                 var file = new ThermoRawFileReader(inputPath);
                 var scansFull = file.GetAllScansList();
 
@@ -120,8 +99,8 @@ namespace Test.IsdTests
         [Test]
         public void FileConversion0418()
         {
-            string inputPath = @"E:\ISD Project\04-18-24_td-HPLC_DDA-vs-ISF\data\04-18-24_DTT_ISF-orbi_1pmol.raw";
-            string path75 = @"E:\ISD Project\04-18-24_td-HPLC_DDA-vs-ISF\data\04-18-24_DTT_ISF-orbi_1pmol_75V.mzML";
+            string inputPath = @"E:\ISD Project\ISD_240606\06-06-24_mix_higherConc_5uL_ISD.raw";
+            string path75 = @"E:\ISD Project\ISD_240606\06-06-24_mix_higherConc_5uL_ISD_75V.mzML";
             
             var file = new ThermoRawFileReader(inputPath);
             var scansFull = file.GetAllScansList();
@@ -134,7 +113,7 @@ namespace Test.IsdTests
             GenericMsDataFile msFile75 = new GenericMsDataFile(results75, genericSourceFile);
             msFile75.ExportAsMzML(path75, false);
 
-            string path100 = @"E:\ISD Project\04-18-24_td-HPLC_DDA-vs-ISF\data\04-18-24_DTT_ISF-orbi_1pmol_100V.mzML";
+            string path100 = @"E:\ISD Project\ISD_240606\06-06-24_mix_higherConc_5uL_ISD_100V.mzML";
             var file2 = new ThermoRawFileReader(inputPath);
             var scansFull2 = file2.GetAllScansList();
             var ms1Scans2 = scansFull2.GetMs1Scans();
@@ -147,5 +126,38 @@ namespace Test.IsdTests
             GenericMsDataFile msFile100 = new GenericMsDataFile(results100, genericSourceFile2);
             msFile100.ExportAsMzML(path100, false);
         }
+
+        [Test]
+        public void ConvertFileList()
+        {
+            string fileListPath = @"E:\ISD Project\ISD_240606\FileList2.txt";
+
+            string[] names = System.IO.File.ReadAllLines(fileListPath);
+
+            foreach (string name in names)
+            {
+                string folderName = @"ISD_240606\";
+                string outputPath = @"E:\ISD Project\" + folderName + name + ".mzML";
+
+                string inputPath = @"E:\ISD Project\" + folderName + name + ".raw";
+                var file = new ThermoRawFileReader(inputPath);
+                var scansFull = file.GetAllScansList();
+
+                var ms1Scans = scansFull.GetMs1Scans();
+                int voltage = 100;
+                var isdScans = scansFull.GetISDScans(voltage).ToList();
+                var interleaved = ms1Scans.InterleaveScans(isdScans).ToList();
+
+                var results = interleaved.UpdateMs2MetaData().UpdateIsdScanMetaData().ToArray();
+
+                SourceFile genericSourceFile = new SourceFile("no nativeID format", "mzML format",
+                    null, null, null);
+                GenericMsDataFile msFile = new GenericMsDataFile(results, genericSourceFile);
+                msFile.ExportAsMzML(outputPath, false);
+            }
+
+
+        }
+
     }
 }

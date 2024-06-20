@@ -40,6 +40,8 @@ namespace ISD
             
 
         }
+
+        /*
         public static IEnumerable<MsDataScan> UpdateScanStringMetaData(this IEnumerable<MsDataScan> scans)
         {
             int oneBasedScanNumber = 1;
@@ -58,6 +60,7 @@ namespace ISD
                 yield return scan;
             }
         }
+        */
 
         public static IEnumerable<MsDataScan> UpdateIsdScanMetaData(this IEnumerable<MsDataScan> scans)
         {
