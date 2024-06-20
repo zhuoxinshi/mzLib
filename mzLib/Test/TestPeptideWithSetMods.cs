@@ -1,5 +1,7 @@
 ﻿using Chemistry;
 using NUnit.Framework;
+using Assert = NUnit.Framework.Legacy.ClassicAssert;
+using CollectionAssert = NUnit.Framework.Legacy.CollectionAssert;
 using Proteomics;
 using Proteomics.ProteolyticDigestion;
 using System;
@@ -1142,6 +1144,41 @@ namespace Test
 
             var expectedFullStringsWithMassShifts = File.ReadAllLines(Path.Combine(TestContext.CurrentContext.TestDirectory, "DatabaseTests", "fullSequencesWithMassShift.txt"));
             CollectionAssert.AreEquivalent(expectedFullStringsWithMassShifts, allSequences.ToArray());
+        }
+
+        [Test]
+        public static void TestPeptideWithSetModsNoParentProtein()
+        {
+            // null parent
+            DigestionParams dParams = new DigestionParams();
+            var pwsm = new PeptideWithSetModifications("P", null,
+                digestionParams: dParams, p: null);
+            Assert.AreEqual('-', pwsm.PreviousAminoAcid);
+            Assert.AreEqual('-', pwsm.PreviousResidue);
+            Assert.AreEqual('-', pwsm.NextAminoAcid);
+            Assert.AreEqual('-', pwsm.NextResidue);
+
+            // non-null parent
+            Protein protein = new("MQLLRCFSIFSVIASVLAQELTTICEQIPSPTLESTPYSLSTTTILANGKAMQGVFEYYKSVTFVSNCGSHPSTTSKGSPINTQYVF", "P32781");
+            var pwsMods = protein.Digest(new DigestionParams(), new List<Modification>(), new List<Modification>()).ToList();
+
+            var first = pwsMods.First(p => p.BaseSequence == "MQLLRCFSIFSVIASVLAQELTTICEQIPSPTLESTPYSLSTTTILANGK");
+            Assert.AreEqual('-', first.PreviousAminoAcid);
+            Assert.AreEqual('-', first.PreviousResidue);
+            Assert.AreEqual('A', first.NextAminoAcid);
+            Assert.AreEqual('A', first.NextResidue);
+
+            var middle = pwsMods.First(p => p.BaseSequence == "SVTFVSNCGSHPSTTSK");
+            Assert.AreEqual('K', middle.PreviousAminoAcid);
+            Assert.AreEqual('K',middle.PreviousResidue);
+            Assert.AreEqual('G',middle.NextAminoAcid);
+            Assert.AreEqual('G',middle.NextResidue);
+
+            var last = pwsMods.First(p => p.BaseSequence == "GSPINTQYVF");
+            Assert.AreEqual('K', last.PreviousAminoAcid);
+            Assert.AreEqual('K', last.PreviousResidue);
+            Assert.AreEqual('-', last.NextAminoAcid);
+            Assert.AreEqual('-', last.NextResidue);
         }
     }
 }
