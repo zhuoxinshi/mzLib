@@ -159,5 +159,73 @@ namespace Test.IsdTests
 
         }
 
+        [Test]
+        public void FileConversionForMultipleVoltages()
+        {
+            string inputPath = @"E:\ISD Project\11-03-22_FractionD_2D_PEPPI_ISF.raw";
+            string path60only = @"E:\ISD Project\11-03-22_FractionD_2D_PEPPI_ISF_60only.mzML";
+            string path100only = @"E:\ISD Project\11-03-22_FractionD_2D_PEPPI_ISF_100only.mzML";
+
+            var file = new ThermoRawFileReader(inputPath);
+            var scansFull = file.GetAllScansList();
+            var ms1Scans = scansFull.GetMs1Scans();
+            var isdScans60 = scansFull.GetISDScans(60).ToList();
+            var interleaved60 = ms1Scans.InterleaveScans(isdScans60).ToList();
+            var results60 = interleaved60.UpdateMs2MetaData().UpdateIsdScanMetaData().ToArray();
+            SourceFile genericSourceFile = new SourceFile("no nativeID format", "mzML format",
+                null, null, null);
+            GenericMsDataFile msFile60 = new GenericMsDataFile(results60, genericSourceFile);
+            msFile60.ExportAsMzML(path60only, false);
+
+            var file2 = new ThermoRawFileReader(inputPath);
+            var scansFull2 = file2.GetAllScansList();
+            var ms1Scans2 = scansFull2.GetMs1Scans();
+            var isdScans100 = scansFull2.GetISDScans(100).ToList();
+            var interleaved100 = ms1Scans2.InterleaveScans(isdScans100).ToList();
+            var results100 = interleaved100.UpdateMs2MetaData().UpdateIsdScanMetaData().ToArray();
+
+            SourceFile genericSourceFile2 = new SourceFile("no nativeID format", "mzML format",
+                null, null, null);
+            GenericMsDataFile msFile100 = new GenericMsDataFile(results100, genericSourceFile2);
+            msFile100.ExportAsMzML(path100only, false);
+        }
+
+        [Test]
+        public void FileConversionForMultipleVoltagesCombined()
+        {
+            string inputPath = @"E:\ISD Project\11-03-22_FractionD_2D_PEPPI_ISF.raw";
+            string pathCombined = @"E:\ISD Project\11-03-22_FractionD_2D_PEPPI_ISF_combined.mzML";
+            var file = new ThermoRawFileReader(inputPath);
+            var scansFull = file.GetAllScansList();
+            var allScans = scansFull.Skip(2).ToList();
+            foreach (MsDataScan scan in allScans)
+            {
+                if (scan.ScanFilter.Contains("sid=60"))
+                {
+                    int precursorScanNumber = scan.OneBasedScanNumber - 1;
+                    scan.SetOneBasedPrecursorScanNumber(precursorScanNumber);
+                    var isolationWidth = scan.ScanWindowRange.Maximum - scan.ScanWindowRange.Minimum;
+                    scan.MsnOrder = 2;
+                    scan.SetIsolationMz(isolationWidth / 2);
+                    scan.IsolationWidth = isolationWidth;
+                    scan.SelectedIonMZ = isolationWidth / 2;
+                }
+                if (scan.ScanFilter.Contains("sid=100"))
+                {
+                    int precursorScanNumber = scan.OneBasedScanNumber - 2;
+                    scan.SetOneBasedPrecursorScanNumber(precursorScanNumber);
+                    var isolationWidth = scan.ScanWindowRange.Maximum - scan.ScanWindowRange.Minimum;
+                    scan.MsnOrder = 2;
+                    scan.SetIsolationMz(isolationWidth / 2);
+                    scan.IsolationWidth = isolationWidth;
+                    scan.SelectedIonMZ = isolationWidth / 2;
+                }
+            }
+            SourceFile genericSourceFile3 = new SourceFile("no nativeID format", "mzML format",
+                null, null, null);
+            GenericMsDataFile msFileCombined = new GenericMsDataFile(allScans.ToArray(), genericSourceFile3);
+            msFileCombined.ExportAsMzML(pathCombined, false);
+        }
+
     }
 }

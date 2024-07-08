@@ -84,5 +84,23 @@ namespace ISD
                 yield return scan;
             }
         }
+
+        //public static IEnumerable<MsDataScan> UpdateMetaDataForAll(this IEnumerable<MsDataScan> scans)
+        //{
+        //    foreach (MsDataScan scan in scans)
+        //    {
+        //        if (!scan.ScanFilter.Contains("sid=15"))
+        //        {
+        //            int precursorScanNumber = scan.OneBasedScanNumber - 1;
+        //            scan.SetOneBasedPrecursorScanNumber(precursorScanNumber);
+        //            var isolationWidth = scan.ScanWindowRange.Maximum - scan.ScanWindowRange.Minimum;
+        //            scan.MsnOrder = 2;
+        //            scan.SetIsolationMz(isolationWidth / 2);
+        //            scan.IsolationWidth = isolationWidth;
+        //            scan.SelectedIonMZ = isolationWidth / 2;
+        //        }
+        //        yield return scan;
+        //    }
+        //}
     }
 }
