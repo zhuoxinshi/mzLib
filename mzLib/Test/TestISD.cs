@@ -14,14 +14,14 @@ namespace Test
         [Test]
         public static void SnipMzMlForISD()
         {
-            string origDataFile = @"E:\ISD Project\TestIsdDataAnalysis\06-07-24_mix_1pmol_5uL_ISD_RT32.16-35.59.mzML";
+            string origDataFile = @"E:\ISD Project\ISD_240606\06-11-24_mix_sample1_2uL_ISD.mzML";
             FilteringParams filter = new FilteringParams(200, 0.01, 1, null, false, false, true);
             var reader = MsDataFileReader.GetDataFile(origDataFile);
             reader.LoadAllStaticData(filter, 1);
 
             var scans = reader.GetAllScansList();
-            int startScan = 113;
-            int endScan = 114;
+            int startScan = 1449;
+            int endScan = 1552;
             var scansToKeep = scans.Where(x => x.OneBasedScanNumber >= startScan && x.OneBasedScanNumber <= endScan).ToList();
 
             List<(int oneBasedScanNumber, int? oneBasedPrecursorScanNumber)> scanNumbers = new List<(int oneBasedScanNumber, int? oneBasedPrecursorScanNumber)>();
@@ -110,7 +110,7 @@ namespace Test
             reader.LoadAllStaticData(filter, 1);
 
             var scans = reader.GetAllScansList();
-            int startScan = 1838;
+            int startScan = 1449;
             int endScan = 2156;
             var scansToKeep = scans.Where(x => x.OneBasedScanNumber >= startScan && x.OneBasedScanNumber <= endScan).ToList();
 
