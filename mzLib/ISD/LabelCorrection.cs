@@ -2,11 +2,12 @@
 using System.Text;
 using Easy.Common.Interfaces;
 using MassSpectrometry;
+using Readers;
 
 
 namespace ISD
 {
-    public static class DataLoading
+    public static class LabelCorrection
     {
         public static IEnumerable<MsDataScan> GetISDScans(this List<MsDataScan> scans, double ISDVoltage)
         {
@@ -102,5 +103,49 @@ namespace ISD
         //        yield return scan;
         //    }
         //}
+
+        public static void MultipleVoltageFileConversion(string rawFilePath, string outputPath)
+        {
+            var file = new ThermoRawFileReader(rawFilePath);
+            var scansFull = file.GetAllScansList();
+            var ms1scan = scansFull.Where(s => s.ScanFilter.Contains("sid=15")).FirstOrDefault();
+            var isolationWidth = ms1scan.ScanWindowRange.Maximum - ms1scan.ScanWindowRange.Minimum;
+            var isolationMz = isolationWidth / 2 + ms1scan.ScanWindowRange.Minimum;
+            foreach (MsDataScan scan in scansFull)
+            {
+                if (scan.ScanFilter.Contains("sid=60"))
+                {
+                    int precursorScanNumber = scan.OneBasedScanNumber - 1;
+                    scan.SetOneBasedPrecursorScanNumber(precursorScanNumber);
+                    scan.MsnOrder = 2;
+                    scan.SetIsolationMz(isolationMz);
+                    scan.IsolationWidth = isolationWidth;
+                    scan.SelectedIonMZ = isolationMz;
+                }
+                if (scan.ScanFilter.Contains("sid=80"))
+                {
+                    int precursorScanNumber = scan.OneBasedScanNumber - 2;
+                    scan.SetOneBasedPrecursorScanNumber(precursorScanNumber);
+                    scan.MsnOrder = 2;
+                    scan.SetIsolationMz(isolationMz);
+                    scan.IsolationWidth = isolationWidth;
+                    scan.SelectedIonMZ = isolationMz;
+                }
+                if (scan.ScanFilter.Contains("sid=100"))
+                {
+                    int precursorScanNumber = scan.OneBasedScanNumber - 3;
+                    scan.SetOneBasedPrecursorScanNumber(precursorScanNumber);
+                    scan.MsnOrder = 2;
+                    scan.SetIsolationMz(isolationMz);
+                    scan.IsolationWidth = isolationWidth;
+                    scan.SelectedIonMZ = isolationMz;
+                }
+            }
+            SourceFile genericSourceFile = new SourceFile("no nativeID format", "mzML format",
+                null, null, null);
+            GenericMsDataFile msFileCombined = new GenericMsDataFile(scansFull.ToArray(), genericSourceFile);
+            msFileCombined.ExportAsMzML(outputPath, false);
+        }
+
     }
 }
