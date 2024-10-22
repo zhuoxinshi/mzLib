@@ -78,9 +78,9 @@ namespace ISD
                     scan.SetOneBasedScanNumber(oneBasedScanNumber);
                     scan.SetNativeID(nativeBase + oneBasedScanNumber);
                     StringBuilder sb = new StringBuilder();
-                    sb.AppendJoin("", "+ ", "NSI ", "Full ms ", "[", scan.ScanWindowRange.Minimum, "-",
-                        scan.ScanWindowRange.Maximum, "]");
-                    scan.ScanFilter = sb.ToString();
+                    //sb.AppendJoin("", "+ ", "NSI ", "Full ms ", "[", scan.ScanWindowRange.Minimum, "-",
+                    //    scan.ScanWindowRange.Maximum, "]");
+                    //scan.ScanFilter = sb.ToString();
                     oneBasedScanNumber++;
                 yield return scan;
             }

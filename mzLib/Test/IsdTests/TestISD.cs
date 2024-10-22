@@ -28,8 +28,8 @@ namespace Test.IsdTests
         [Test]
         public void TestImportExport2()
         {
-            string path = @"E:\ISD Project\ISD_240812\08-12-24_sample15_1uL_65min_orbiMS1_ISD100.raw";
-            string path2 = @"E:\ISD Project\ISD_240812\08-12-24_sample15_1uL_65min_orbiMS1_ISD100.mzML";
+            string path = @"E:\ISD Project\ISD_240606\06-07-24_mix_sample1_5uL_ISD.raw";
+            string path2 = @"E:\ISD Project\ISD_240606\06-07-24_mix_sample1_5uL_ISD.mzML";
 
             var file = new ThermoRawFileReader(path);
             var scansFull = file.GetAllScansList();
