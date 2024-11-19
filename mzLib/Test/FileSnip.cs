@@ -9,19 +9,18 @@ using System.Threading.Tasks;
 
 namespace Test
 {
-    internal class TestISD
+    internal class FileSnip
     {
         [Test]
         public static void SnipMzMlForISD()
         {
-            string origDataFile = @"E:\ISD Project\ISD_240606\06-11-24_mix_sample1_2uL_ISD.mzML";
-            FilteringParams filter = new FilteringParams(200, 0.01, 1, null, false, false, true);
+            string origDataFile = @"E:\ISD Project\TestIsdDataAnalysis\data\08-12-24_PEPPI_FractionD_orbiMS1_ISD60-80-100__relativeIntensity(2).mzML";
+            //FilteringParams filter = new FilteringParams(200, 0.01, 1, null, false, false, true);
             var reader = MsDataFileReader.GetDataFile(origDataFile);
-            reader.LoadAllStaticData(filter, 1);
 
             var scans = reader.GetAllScansList();
-            int startScan = 1449;
-            int endScan = 1552;
+            int startScan = 1049;
+            int endScan = 1232;
             var scansToKeep = scans.Where(x => x.OneBasedScanNumber >= startScan && x.OneBasedScanNumber <= endScan).ToList();
 
             List<(int oneBasedScanNumber, int? oneBasedPrecursorScanNumber)> scanNumbers = new List<(int oneBasedScanNumber, int? oneBasedPrecursorScanNumber)>();
@@ -104,14 +103,13 @@ namespace Test
         [Test]
         public static void SnipMzMlForDDA()
         {
-            string origDataFile = @"E:\ISD Project\ISD_240606\06-07-24_mix_1pmol_5uL_DDA.raw";
-            FilteringParams filter = new FilteringParams(200, 0.01, 1, null, false, false, true);
+            string origDataFile = @"E:\DIA\Data\DIA_241108\11-08-24_td-DIA_5pro-sample10_105min_30mz_25stpHCD_AGC400_500ms_micro1.raw";
+            //FilteringParams filter = new FilteringParams(200, 0.01, 1, null, false, false, true);
             var reader = MsDataFileReader.GetDataFile(origDataFile);
-            reader.LoadAllStaticData(filter, 1);
 
             var scans = reader.GetAllScansList();
-            int startScan = 1449;
-            int endScan = 2156;
+            int startScan = 2194;
+            int endScan = 2397;
             var scansToKeep = scans.Where(x => x.OneBasedScanNumber >= startScan && x.OneBasedScanNumber <= endScan).ToList();
 
             List<(int oneBasedScanNumber, int? oneBasedPrecursorScanNumber)> scanNumbers = new List<(int oneBasedScanNumber, int? oneBasedPrecursorScanNumber)>();

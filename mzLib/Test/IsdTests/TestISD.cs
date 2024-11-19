@@ -28,8 +28,8 @@ namespace Test.IsdTests
         [Test]
         public void TestImportExport2()
         {
-            string path = @"E:\ISD Project\ISD_240606\06-07-24_mix_sample1_5uL_ISD.raw";
-            string path2 = @"E:\ISD Project\ISD_240606\06-07-24_mix_sample1_5uL_ISD.mzML";
+            string path = @"E:\ISD Project\ISD_240606\06-07-24_mix_1pmol_5uL_ISD.raw";
+            string path2 = @"E:\ISD Project\ISD_240606\06-07-24_mix_1pmol_5uL_ISD.mzML";
 
             var file = new ThermoRawFileReader(path);
             var scansFull = file.GetAllScansList();
@@ -231,8 +231,8 @@ namespace Test.IsdTests
         [Test]
         public void FileConversionForMultipleVoltagesCombined()
         {
-            string inputPath = @"E:\ISD Project\ISD_240927\09-27-24_PEPPI_FractionE_orbiMS1_ISD60-80-100_rep3.raw";
-            string pathCombined = @"E:\ISD Project\ISD_240927\ISD_oldLabels\09-27-24_PEPPI_FractionE_orbiMS1_ISD60-80-100_rep3.mzML";
+            string inputPath = @"E:\ISD Project\CE_241118\11-15-24_CE_PEPPI-YC-ammon-acet_5AA_500nL-pHjunction_ISDrep3.raw";
+            string pathCombined = @"E:\ISD Project\CE_241118\11-15-24_CE_PEPPI-YC-ammon-acet_5AA_500nL-pHjunction_ISDrep3.mzML";
             var file = new ThermoRawFileReader(inputPath);
             var scansFull = file.GetAllScansList();
             foreach (MsDataScan scan in scansFull)
@@ -241,31 +241,34 @@ namespace Test.IsdTests
                 {
                     int precursorScanNumber = scan.OneBasedScanNumber - 1;
                     scan.SetOneBasedPrecursorScanNumber(precursorScanNumber);
-                    var isolationWidth = scan.ScanWindowRange.Maximum - scan.ScanWindowRange.Minimum;
+                    var ms1scan = scansFull.Where(s => s.OneBasedScanNumber == precursorScanNumber).First();
+                    var isolationWidth = ms1scan.ScanWindowRange.Maximum - ms1scan.ScanWindowRange.Minimum;
                     scan.MsnOrder = 2;
-                    scan.SetIsolationMz(isolationWidth / 2);
+                    scan.SetIsolationMz(ms1scan.ScanWindowRange.Minimum + isolationWidth / 2);
                     scan.IsolationWidth = isolationWidth;
-                    scan.SelectedIonMZ = isolationWidth / 2;
+                    scan.SelectedIonMZ = ms1scan.ScanWindowRange.Minimum + isolationWidth / 2;
                 }
                 if (scan.ScanFilter.Contains("sid=80"))
                 {
-                    int precursorScanNumber = scan.OneBasedScanNumber - 2;
+                    int precursorScanNumber = scan.OneBasedScanNumber - 1;
                     scan.SetOneBasedPrecursorScanNumber(precursorScanNumber);
-                    var isolationWidth = scan.ScanWindowRange.Maximum - scan.ScanWindowRange.Minimum;
+                    var ms1scan = scansFull.Where(s => s.OneBasedScanNumber == precursorScanNumber).First();
+                    var isolationWidth = ms1scan.ScanWindowRange.Maximum - ms1scan.ScanWindowRange.Minimum;
                     scan.MsnOrder = 2;
-                    scan.SetIsolationMz(isolationWidth / 2);
+                    scan.SetIsolationMz(ms1scan.ScanWindowRange.Minimum + isolationWidth / 2);
                     scan.IsolationWidth = isolationWidth;
-                    scan.SelectedIonMZ = isolationWidth / 2;
+                    scan.SelectedIonMZ = ms1scan.ScanWindowRange.Minimum + isolationWidth / 2;
                 }
                 if (scan.ScanFilter.Contains("sid=100"))
                 {
-                    int precursorScanNumber = scan.OneBasedScanNumber - 3;
+                    int precursorScanNumber = scan.OneBasedScanNumber - 1;
                     scan.SetOneBasedPrecursorScanNumber(precursorScanNumber);
-                    var isolationWidth = scan.ScanWindowRange.Maximum - scan.ScanWindowRange.Minimum;
+                    var ms1scan = scansFull.Where(s => s.OneBasedScanNumber == precursorScanNumber).First();
+                    var isolationWidth = ms1scan.ScanWindowRange.Maximum - ms1scan.ScanWindowRange.Minimum;
                     scan.MsnOrder = 2;
-                    scan.SetIsolationMz(isolationWidth / 2);
+                    scan.SetIsolationMz(ms1scan.ScanWindowRange.Minimum + isolationWidth / 2);
                     scan.IsolationWidth = isolationWidth;
-                    scan.SelectedIonMZ = isolationWidth / 2;
+                    scan.SelectedIonMZ = ms1scan.ScanWindowRange.Minimum + isolationWidth / 2;
                 }
             }
             SourceFile genericSourceFile3 = new SourceFile("no nativeID format", "mzML format",
@@ -368,6 +371,62 @@ namespace Test.IsdTests
             var isdScans60 = scansFull.GetISDScans(60).ToList();
             var isdScans80 = scansFull.GetISDScans(80).ToList();
             var isdScans100 = scansFull.GetISDScans(100).ToList();
+        }
+
+        [Test]
+        public static void TestTopDIADecon()
+        {
+            string file = @"E:\DIA\TopDIA\20231117_DIA_720_800_rep2_RT46.72-48.71.mzML";
+            var reader = MsDataFileReader.GetDataFile(file);
+            var ms1scans = reader.GetMS1Scans();
+            var deconParams = new ClassicDeconvolutionParameters(6, 60, 20, 3, Polarity.Positive);
+            foreach(var scan in ms1scans)
+            {
+                var envelope = Deconvoluter.Deconvolute(scan, deconParams, new MzLibUtil.MzRange(720,733)).ToArray();
+            }
+        }
+
+        [Test]
+        public static void TestReadFile()
+        {
+            string file = @"E:\DIA\FragPipe\DIA\CPTAC_CCRCC_W_JHU_20190112_LUMOS_C3L-00418_NAT_Q1.mzML";
+            var reader = MsDataFileReader.GetDataFile(file);
+            var scans = reader.GetAllScansList();
+        }
+
+        [Test]
+        public static void SeparateFilesForTopFD()
+        {
+            string file = @"E:\ISD Project\ISD_240812\08-12-24_PEPPI_FractionD_orbiMS1_ISD60-80-100.raw";
+            var reader = new ThermoRawFileReader(file);
+            var scans = reader.GetAllScansList();
+            var ms1Scans = scans.GetISDScans(15).ToArray();
+            var isdScans60 = scans.GetISDScans(60).ToArray();
+            var isdScans80 = scans.GetISDScans(80).ToArray();
+            var isdScans100 = scans.GetISDScans(100).ToArray();
+            var ms1outPath = @"E:\toppic-windows-1.7.4\ISD_yeast_search\separateVoltageFile\08-12-24_PEPPI_FractionD_orbiMS1_ISD60-80-100_MS1.mzML";
+            var isd60outPath = @"E:\toppic-windows-1.7.4\ISD_yeast_search\separateVoltageFile\08-12-24_PEPPI_FractionD_orbiMS1_ISD60-80-100_60.mzML";
+            var isd80outPath = @"E:\toppic-windows-1.7.4\ISD_yeast_search\separateVoltageFile\08-12-24_PEPPI_FractionD_orbiMS1_ISD60-80-100_80.mzML";
+            var isd100outPath = @"E:\toppic-windows-1.7.4\ISD_yeast_search\separateVoltageFile\08-12-24_PEPPI_FractionD_orbiMS1_ISD60-80-100_100.mzML";
+            SourceFile genericSourceFile = new SourceFile("no nativeID format", "mzML format",
+                null, null, null);
+            GenericMsDataFile msFileCombined = new GenericMsDataFile(ms1Scans, genericSourceFile);
+            msFileCombined.ExportAsMzML(ms1outPath, false);
+            GenericMsDataFile isd60File = new GenericMsDataFile(isdScans60, genericSourceFile);
+            isd60File.ExportAsMzML(isd60outPath, false);
+            GenericMsDataFile isd80File = new GenericMsDataFile(isdScans80, genericSourceFile);
+            isd80File.ExportAsMzML(isd80outPath, false);
+            GenericMsDataFile isd100File = new GenericMsDataFile(isdScans100, genericSourceFile);
+            isd100File.ExportAsMzML(isd100outPath, false);
+        }
+
+        [Test]
+        public static void TestReadFeatureFile()
+        {
+            var file = @"E:\toppic-windows-1.6.5\ISD\test1\id_08-12-24_PEPPI_FractionD_orbiMS1_ISD60-80-100_60_ms1.feature";
+            var featureFile = new Ms1FeatureFile(file);
+            //var feature = featureFile.First();
+            featureFile.LoadResults();
         }
     }
 }
