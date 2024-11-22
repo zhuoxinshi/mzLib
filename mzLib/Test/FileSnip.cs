@@ -14,7 +14,7 @@ namespace Test
         [Test]
         public static void SnipMzMlForISD()
         {
-            string origDataFile = @"E:\ISD Project\TestIsdDataAnalysis\data\08-12-24_PEPPI_FractionD_orbiMS1_ISD60-80-100__relativeIntensity(2).mzML";
+            string origDataFile = @"E:\ISD Project\TestIsdDataAnalysis\data\08-12-24_PEPPI_FractionD_orbiMS1_ISD60-80-100_2mzstep_NoNorm(1).mzML";
             //FilteringParams filter = new FilteringParams(200, 0.01, 1, null, false, false, true);
             var reader = MsDataFileReader.GetDataFile(origDataFile);
 
