@@ -571,7 +571,7 @@ namespace Readers
                     };
                     mzML.run.spectrumList.spectrum[i - 1].precursorList.precursor[0].activation.cvParam[0] = new Generated.CVParamType();
 
-                    DissociationType dissociationType = scanWithPrecursor.DissociationType.Value;
+                    DissociationType dissociationType = scanWithPrecursor.DissociationType.HasValue ? scanWithPrecursor.DissociationType.Value: DissociationType.CID;
 
                     mzML.run.spectrumList.spectrum[i - 1].precursorList.precursor[0].activation.cvParam[0].accession = DissociationTypeAccessions[dissociationType];
                     mzML.run.spectrumList.spectrum[i - 1].precursorList.precursor[0].activation.cvParam[0].name = DissociationTypeNames[dissociationType];

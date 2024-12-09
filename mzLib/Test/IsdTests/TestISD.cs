@@ -231,9 +231,9 @@ namespace Test.IsdTests
         [Test]
         public void FileConversionForMultipleVoltagesCombined()
         {
-            string inputPath = @"E:\ISD Project\CE_241118\11-15-24_CE_PEPPI-YC-ammon-acet_5AA_500nL-pHjunction_ISDrep3.raw";
-            string pathCombined = @"E:\ISD Project\CE_241118\11-15-24_CE_PEPPI-YC-ammon-acet_5AA_500nL-pHjunction_ISDrep3.mzML";
-            var file = new ThermoRawFileReader(inputPath);
+            string inputPath = @"E:\ISD Project\ISD_240812\08-12-24_PEPPI_FractionD_orbiMS1_ISD60-80-100_averagedAll_0.5mzstep.mzML";
+            string pathCombined = @"E:\ISD Project\ISD_240812\08-12-24_PEPPI_FractionD_orbiMS1_ISD60-80-100_averagedAll_0.5mzstep_relabled.mzML";
+            var file = MsDataFileReader.GetDataFile(inputPath);
             var scansFull = file.GetAllScansList();
             foreach (MsDataScan scan in scansFull)
             {
@@ -250,7 +250,7 @@ namespace Test.IsdTests
                 }
                 if (scan.ScanFilter.Contains("sid=80"))
                 {
-                    int precursorScanNumber = scan.OneBasedScanNumber - 1;
+                    int precursorScanNumber = scan.OneBasedScanNumber - 2;
                     scan.SetOneBasedPrecursorScanNumber(precursorScanNumber);
                     var ms1scan = scansFull.Where(s => s.OneBasedScanNumber == precursorScanNumber).First();
                     var isolationWidth = ms1scan.ScanWindowRange.Maximum - ms1scan.ScanWindowRange.Minimum;
@@ -261,7 +261,7 @@ namespace Test.IsdTests
                 }
                 if (scan.ScanFilter.Contains("sid=100"))
                 {
-                    int precursorScanNumber = scan.OneBasedScanNumber - 1;
+                    int precursorScanNumber = scan.OneBasedScanNumber - 3;
                     scan.SetOneBasedPrecursorScanNumber(precursorScanNumber);
                     var ms1scan = scansFull.Where(s => s.OneBasedScanNumber == precursorScanNumber).First();
                     var isolationWidth = ms1scan.ScanWindowRange.Maximum - ms1scan.ScanWindowRange.Minimum;
@@ -297,9 +297,9 @@ namespace Test.IsdTests
         [Test]
         public void FileConversion5voltages()
         {
-            string inputPath = @"E:\ISD Project\ISD_241001\10-03-24_PEPPI_FractionB_orbiMS1_ISD40-50-60-80-100_micro1.raw";
-            string pathCombined = @"E:\ISD Project\ISD_241001\10-03-24_PEPPI_FractionB_orbiMS1_ISD40-50-60-80-100_micro1.mzML";
-            var file = new ThermoRawFileReader(inputPath);
+            string inputPath = @"E:\ISD Project\ISD_241001\10-03-24_PEPPI_FractionD_orbiMS1_ISD40-50-60-80-100_micro4.raw";
+            string pathCombined = @"E:\ISD Project\ISD_240812\test.mzML";
+            var file = MsDataFileReader.GetDataFile(inputPath);
             var scansFull = file.GetAllScansList();
             foreach (MsDataScan scan in scansFull)
             {
