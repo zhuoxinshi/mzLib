@@ -12,15 +12,15 @@ namespace Test
     internal class FileSnip
     {
         [Test]
-        public static void SnipMzMlForISD()
+        public static void SnipMzMlForMzMLFile()
         {
-            string origDataFile = @"E:\ISD Project\ISD_240812\08-12-24_PEPPI_FractionD_orbiMS1_ISD60-80-100_averagedAll_0.5mzstep_relabled.mzML";
+            string origDataFile = @"E:\ISD Project\ISD_240606\06-07-24_mix_sample1_5uL_ISD_RT34.83-38.21.mzML";
             //FilteringParams filter = new FilteringParams(200, 0.01, 1, null, false, false, true);
             var reader = MsDataFileReader.GetDataFile(origDataFile);
 
             var scans = reader.GetAllScansList();
-            int startScan = 1049;
-            int endScan = 1232;
+            int startScan = 1115;
+            int endScan = 1228;
             var scansToKeep = scans.Where(x => x.OneBasedScanNumber >= startScan && x.OneBasedScanNumber <= endScan).ToList();
 
             List<(int oneBasedScanNumber, int? oneBasedPrecursorScanNumber)> scanNumbers = new List<(int oneBasedScanNumber, int? oneBasedPrecursorScanNumber)>();
@@ -101,15 +101,15 @@ namespace Test
         }
 
         [Test]
-        public static void SnipMzMlForDDA()
+        public static void SnipMzMlForRawFile()
         {
-            string origDataFile = @"E:\DIA\Data\DIA_241108\11-08-24_td-DIA_5pro-sample10_105min_30mz_25stpHCD_AGC400_500ms_micro1.raw";
+            string origDataFile = @"E:\ISD Project\ISD_240606\06-07-24_mix_sample1_5uL_ISD.raw";
             //FilteringParams filter = new FilteringParams(200, 0.01, 1, null, false, false, true);
             var reader = MsDataFileReader.GetDataFile(origDataFile);
 
             var scans = reader.GetAllScansList();
-            int startScan = 2194;
-            int endScan = 2397;
+            int startScan = 1115;
+            int endScan = 1228;
             var scansToKeep = scans.Where(x => x.OneBasedScanNumber >= startScan && x.OneBasedScanNumber <= endScan).ToList();
 
             List<(int oneBasedScanNumber, int? oneBasedPrecursorScanNumber)> scanNumbers = new List<(int oneBasedScanNumber, int? oneBasedPrecursorScanNumber)>();

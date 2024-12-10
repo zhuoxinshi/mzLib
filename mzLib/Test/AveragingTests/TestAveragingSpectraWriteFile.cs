@@ -147,8 +147,5 @@ namespace Test.AveragingTests
             Directory.Delete(customDestinationDirectory, true);
             Directory.Delete(customDestinationDirectory2, true);
         }
-
-
-
     }
 }
