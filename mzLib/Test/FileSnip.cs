@@ -14,13 +14,13 @@ namespace Test
         [Test]
         public static void SnipMzMlForMzMLFile()
         {
-            string origDataFile = @"E:\ISD Project\ISD_240606\06-07-24_mix_sample1_5uL_ISD_RT34.83-38.21.mzML";
+            string origDataFile = @"E:\ISD Project\ISD_bu\01-14-25_bu_Yeast_SP3_1ug_rep1_ISD100_labeled.mzML";
             //FilteringParams filter = new FilteringParams(200, 0.01, 1, null, false, false, true);
             var reader = MsDataFileReader.GetDataFile(origDataFile);
 
             var scans = reader.GetAllScansList();
-            int startScan = 1115;
-            int endScan = 1228;
+            int startScan = 19956;
+            int endScan = 21207;
             var scansToKeep = scans.Where(x => x.OneBasedScanNumber >= startScan && x.OneBasedScanNumber <= endScan).ToList();
 
             List<(int oneBasedScanNumber, int? oneBasedPrecursorScanNumber)> scanNumbers = new List<(int oneBasedScanNumber, int? oneBasedPrecursorScanNumber)>();
@@ -103,13 +103,13 @@ namespace Test
         [Test]
         public static void SnipMzMlForRawFile()
         {
-            string origDataFile = @"E:\ISD Project\ISD_240606\06-07-24_mix_sample1_5uL_ISD.raw";
+            string origDataFile = @"E:\ISD Project\ISD_bu\01-14-25_bu-DDA_Yeast_SP3_1ug_rep1.raw";
             //FilteringParams filter = new FilteringParams(200, 0.01, 1, null, false, false, true);
             var reader = MsDataFileReader.GetDataFile(origDataFile);
 
             var scans = reader.GetAllScansList();
-            int startScan = 1115;
-            int endScan = 1228;
+            int startScan = 19956;
+            int endScan = 21207;
             var scansToKeep = scans.Where(x => x.OneBasedScanNumber >= startScan && x.OneBasedScanNumber <= endScan).ToList();
 
             List<(int oneBasedScanNumber, int? oneBasedPrecursorScanNumber)> scanNumbers = new List<(int oneBasedScanNumber, int? oneBasedPrecursorScanNumber)>();

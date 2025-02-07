@@ -19,6 +19,7 @@ using System.Windows.Shapes;
 using Nett;
 using SpectralAveraging;
 using ISD;
+using System.Windows.Media.Animation;
 
 namespace Test.IsdTests
 {
@@ -290,7 +291,6 @@ namespace Test.IsdTests
                 string outputPath = @"E:\ISD Project\" + folderName + name + ".mzML";
 
                 string inputPath = @"E:\ISD Project\" + folderName + name + ".raw";
-                LabelCorrection.MultipleVoltageFileConversion(inputPath, outputPath);
             }
         }
 
@@ -387,14 +387,6 @@ namespace Test.IsdTests
         }
 
         [Test]
-        public static void TestReadFile()
-        {
-            string file = @"E:\DIA\FragPipe\DIA\CPTAC_CCRCC_W_JHU_20190112_LUMOS_C3L-00418_NAT_Q1.mzML";
-            var reader = MsDataFileReader.GetDataFile(file);
-            var scans = reader.GetAllScansList();
-        }
-
-        [Test]
         public static void SeparateFilesForTopFD()
         {
             string file = @"E:\ISD Project\ISD_240812\08-12-24_PEPPI_FractionD_orbiMS1_ISD60-80-100.raw";
@@ -427,6 +419,53 @@ namespace Test.IsdTests
             var featureFile = new Ms1FeatureFile(file);
             //var feature = featureFile.First();
             featureFile.LoadResults();
+        }
+
+        [Test]
+        public static void Test0927()
+        {
+            var path1 = @"E:\ISD Project\ISD_250128\01-28-25_td-ISD_PEPPI-YB_105min_ISD60-80-100_120k_micro1.raw";
+            var path2 = @"E:\ISD Project\ISD_250128\01-28-25_td-ISD_PEPPI-YB_105min_ISD60-80-100_60k_micro1.raw";
+            var path3 = @"E:\ISD Project\ISD_250128\01-28-25_td-DIA_PEPPI-YB_105min_50mz_21-23-25HCD_AGC1e6_200ms.raw";
+            var path4 = @"E:\ISD Project\ISD_240927\09-27-24_PEPPI_FractionC_orbiMS1_ISD60.raw";
+            var path5 = @"E:\ISD Project\ISD_240927\09-27-24_PEPPI_FractionC_orbiMS1_ISD80.raw";
+            var path6 = @"E:\ISD Project\ISD_240927\09-27-24_PEPPI_FractionC_orbiMS1_ISD100.raw";
+            var path7 = @"E:\ISD Project\ISD_240927\09-27-24_PEPPI_FractionD_orbiMS1_ISD60.raw";
+            var path8 = @"E:\ISD Project\ISD_240927\09-27-24_PEPPI_FractionD_orbiMS1_ISD80.raw";
+            var path9 = @"E:\ISD Project\ISD_240927\09-27-24_PEPPI_FractionD_orbiMS1_ISD100.raw";
+            var path10 = @"E:\ISD Project\ISD_240927\09-27-24_PEPPI_FractionA_orbiMS1_ISD60.raw";
+            var path11 = @"E:\ISD Project\ISD_240927\09-27-24_PEPPI_FractionA_orbiMS1_ISD80.raw";
+            var path12 = @"E:\ISD Project\ISD_240927\09-27-24_PEPPI_FractionA_orbiMS1_ISD100.raw";
+            var paths60 = new List<string> { path1, path4, path5, path7, path10 };
+            var paths80 = new List<string> { path2, path5, path8, path11 };
+            var paths100 = new List<string> { path3, path6, path9, path12 };
+            foreach (var path in paths60)
+            {
+                LabelCorrection.ISDSingleVoltageLabelCorrectionFromRaw(path, 60);
+            }
+            foreach(var path in paths80)
+            {
+                LabelCorrection.ISDSingleVoltageLabelCorrectionFromRaw(path, 80);
+            }
+            foreach(var path in paths100)
+            {
+                LabelCorrection.ISDSingleVoltageLabelCorrectionFromRaw(path, 100);
+            }
+        }
+
+        [Test]
+        public static void Test250128()
+        {
+            var path1 = @"E:\ISD Project\ISD_250128\02-03-25_td-ISD_PEPPI-YC_105min_ISD60-80-100_0-1ug.raw";
+            var path2 = @"E:\ISD Project\ISD_250128\02-03-25_td-ISD_PEPPI-YC_105min_ISD60-80-100_0-05ug.raw";
+            var path3 = @"E:\ISD Project\ISD_250128\02-03-25_td-ISD_PEPPI-YC_105min_ISD60-80-100_0-2ug.raw";
+            var path4 = @"E:\ISD Project\ISD_250128\02-03-25_td-ISD_PEPPI-YC_105min_ISD60-80-100_0-5ug.raw";
+            var paths = new List<string> { path1, path2, path3, path4};
+            foreach (var path in paths)
+            {
+                LabelCorrection.ISD60_80_100_LabelCorrectionFromRaw(path);
+            }
+            LabelCorrection.ISDSingleVoltageLabelCorrectionFromRaw(path4, 60);
         }
     }
 }

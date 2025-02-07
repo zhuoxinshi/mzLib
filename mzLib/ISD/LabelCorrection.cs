@@ -104,47 +104,76 @@ namespace ISD
         //    }
         //}
 
-        public static void MultipleVoltageFileConversion(string rawFilePath, string outputPath)
+        public static void ISD60_80_100_LabelCorrectionFromRaw(string inputPath)
         {
-            var file = new ThermoRawFileReader(rawFilePath);
+            var file = MsDataFileReader.GetDataFile(inputPath);
             var scansFull = file.GetAllScansList();
-            var ms1scan = scansFull.Where(s => s.ScanFilter.Contains("sid=15")).FirstOrDefault();
-            var isolationWidth = ms1scan.ScanWindowRange.Maximum - ms1scan.ScanWindowRange.Minimum;
-            var isolationMz = isolationWidth / 2 + ms1scan.ScanWindowRange.Minimum;
             foreach (MsDataScan scan in scansFull)
             {
                 if (scan.ScanFilter.Contains("sid=60"))
                 {
                     int precursorScanNumber = scan.OneBasedScanNumber - 1;
                     scan.SetOneBasedPrecursorScanNumber(precursorScanNumber);
+                    var ms1scan = scansFull.Where(s => s.OneBasedScanNumber == precursorScanNumber).First();
+                    var isolationWidth = ms1scan.ScanWindowRange.Maximum - ms1scan.ScanWindowRange.Minimum;
                     scan.MsnOrder = 2;
-                    scan.SetIsolationMz(isolationMz);
+                    scan.SetIsolationMz(ms1scan.ScanWindowRange.Minimum + isolationWidth / 2);
                     scan.IsolationWidth = isolationWidth;
-                    scan.SelectedIonMZ = isolationMz;
+                    scan.SelectedIonMZ = ms1scan.ScanWindowRange.Minimum + isolationWidth / 2;
                 }
                 if (scan.ScanFilter.Contains("sid=80"))
                 {
                     int precursorScanNumber = scan.OneBasedScanNumber - 2;
                     scan.SetOneBasedPrecursorScanNumber(precursorScanNumber);
+                    var ms1scan = scansFull.Where(s => s.OneBasedScanNumber == precursorScanNumber).First();
+                    var isolationWidth = ms1scan.ScanWindowRange.Maximum - ms1scan.ScanWindowRange.Minimum;
                     scan.MsnOrder = 2;
-                    scan.SetIsolationMz(isolationMz);
+                    scan.SetIsolationMz(ms1scan.ScanWindowRange.Minimum + isolationWidth / 2);
                     scan.IsolationWidth = isolationWidth;
-                    scan.SelectedIonMZ = isolationMz;
+                    scan.SelectedIonMZ = ms1scan.ScanWindowRange.Minimum + isolationWidth / 2;
                 }
                 if (scan.ScanFilter.Contains("sid=100"))
                 {
                     int precursorScanNumber = scan.OneBasedScanNumber - 3;
                     scan.SetOneBasedPrecursorScanNumber(precursorScanNumber);
+                    var ms1scan = scansFull.Where(s => s.OneBasedScanNumber == precursorScanNumber).First();
+                    var isolationWidth = ms1scan.ScanWindowRange.Maximum - ms1scan.ScanWindowRange.Minimum;
                     scan.MsnOrder = 2;
-                    scan.SetIsolationMz(isolationMz);
+                    scan.SetIsolationMz(ms1scan.ScanWindowRange.Minimum + isolationWidth / 2);
                     scan.IsolationWidth = isolationWidth;
-                    scan.SelectedIonMZ = isolationMz;
+                    scan.SelectedIonMZ = ms1scan.ScanWindowRange.Minimum + isolationWidth / 2;
                 }
             }
-            SourceFile genericSourceFile = new SourceFile("no nativeID format", "mzML format",
+            var outPath = inputPath.Replace(".raw", "_labelCorrected.mzML");
+            SourceFile genericSourceFile3 = new SourceFile("no nativeID format", "mzML format",
                 null, null, null);
-            GenericMsDataFile msFileCombined = new GenericMsDataFile(scansFull.ToArray(), genericSourceFile);
-            msFileCombined.ExportAsMzML(outputPath, false);
+            GenericMsDataFile msFileCombined = new GenericMsDataFile(scansFull.ToArray(), genericSourceFile3);
+            msFileCombined.ExportAsMzML(outPath, false);
+        }
+
+        public static void ISDSingleVoltageLabelCorrectionFromRaw(string inputPath, int voltage)
+        {
+            var file = MsDataFileReader.GetDataFile(inputPath);
+            var scansFull = file.GetAllScansList();
+            foreach (MsDataScan scan in scansFull)
+            {
+                if (scan.ScanFilter.Contains($"sid={voltage}"))
+                {
+                    int precursorScanNumber = scan.OneBasedScanNumber - 1;
+                    scan.SetOneBasedPrecursorScanNumber(precursorScanNumber);
+                    var ms1scan = scansFull.Where(s => s.OneBasedScanNumber == precursorScanNumber).First();
+                    var isolationWidth = ms1scan.ScanWindowRange.Maximum - ms1scan.ScanWindowRange.Minimum;
+                    scan.MsnOrder = 2;
+                    scan.SetIsolationMz(ms1scan.ScanWindowRange.Minimum + isolationWidth / 2);
+                    scan.IsolationWidth = isolationWidth;
+                    scan.SelectedIonMZ = ms1scan.ScanWindowRange.Minimum + isolationWidth / 2;
+                }
+            }
+            var outPath = inputPath.Replace(".raw", "_labelCorrected.mzML");
+            SourceFile genericSourceFile3 = new SourceFile("no nativeID format", "mzML format",
+                null, null, null);
+            GenericMsDataFile msFileCombined = new GenericMsDataFile(scansFull.ToArray(), genericSourceFile3);
+            msFileCombined.ExportAsMzML(outPath, false);
         }
 
     }
