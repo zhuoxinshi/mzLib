@@ -800,7 +800,7 @@ namespace Test
         [Test]
         public static void Predict()
         {
-            var psmFilePath = @"E:\Aneuploidy\DDA\062525\1611-R1-Q_E1-9_cali-xml-gptmd(mods+1AAsub)-xml\Task4-SearchTask\Individual File Results\06-25-25_1611-R1-Q_E1+5-calib_Peptides.psmtsv";
+            var psmFilePath = @"E:\Aneuploidy\DDA\062525\1611+1614_E1-8_search-cali-search-gptmd(mod)-search_truncation\Task5-SearchTask\Individual File Results\06-26-25_1614-R1-Q_E1+5-calib_Peptides.psmtsv";
             var psmtsv = SpectrumMatchTsvReader.ReadPsmTsv(psmFilePath, out List<string> warnings).Where(p => p.DecoyContamTarget == "T" && p.QValue <= 0.01);
             var predicted = new List<float>();
             var pair_noSub = new List<(double,float)>();
@@ -815,10 +815,10 @@ namespace Test
                 }
                 if (peptide.EssentialSeq.Contains("substitution") && SpectrumMatchFromTsv.ParseModifications(peptide.FullSequence).Count == 1)
                 {
-                    var newBaseSeq = ParseSubstitutedBaseSequence(peptide.FullSequence);
-                    var prediction = ChronologerEstimator.PredictRetentionTime(newBaseSeq, peptide.FullSequence);
+                    var newFullSeq = ParseSubstitutedFullSequence(peptide.FullSequence);
+                    var newBaseSeq = GetBaseFromFull(newFullSeq);
+                    var prediction = ChronologerEstimator.PredictRetentionTime(newBaseSeq, newFullSeq);
                     pair_sub.Add((peptide.RetentionTime.Value, prediction));
-                    var mods = SpectrumMatchFromTsv.ParseModifications(peptide.FullSequence);
                 }
                 else if (!peptide.EssentialSeq.Contains("substitution") && SpectrumMatchFromTsv.ParseModifications(peptide.FullSequence).Count == 0)
                 {
@@ -834,6 +834,27 @@ namespace Test
                             y: pair_sub.Select(p => p.Item2)).WithTraceInfo("substitution").WithMarkerStyle(Color: Color.fromString("red"));
             var combinedPlot = Chart.Combine(new[] { scatter1, scatter2 });
             combinedPlot.Show();
+        }
+
+        [Test]
+        public static void PredictAll()
+        {
+            var psmFilePath = @"E:\Aneuploidy\DDA\062525\1611+1614_E1-8_search-cali-search-gptmd(mod)-search_truncation\Task5-SearchTask\Individual File Results\06-26-25_1614-R1-Q_E1+5-calib_Peptides.psmtsv";
+            var psmtsv = SpectrumMatchTsvReader.ReadPsmTsv(psmFilePath, out List<string> warnings).Where(p => p.DecoyContamTarget == "T" && p.QValue <= 0.01);
+            var pair = new List<(double, float)>();
+            foreach (var peptide in psmtsv)
+            {
+                if (peptide.FullSequence.Contains("|"))
+                {
+                    continue;
+                }
+                var prediction = ChronologerEstimator.PredictRetentionTime(peptide.BaseSeq, peptide.FullSequence);
+                pair.Add((peptide.RetentionTime.Value, prediction));
+            }
+            var scatter1 = Chart2D.Chart.Point<double, float, string>(
+                            x: pair.Select(p => p.Item1),
+                            y: pair.Select(p => p.Item2)).WithMarkerStyle(Color: Color.fromString("blue"));
+            scatter1.Show();
         }
 
         public static string GetBaseFromFull(string fullSequence)
@@ -861,28 +882,12 @@ namespace Test
             return stringBuilder.ToString();
         }
 
-        public static string ParseSubstitutedBaseSequence(string fullSequence)
-        {
-            var baseSeq = GetBaseFromFull(fullSequence);
-            string modifiedSequence = baseSeq;
-            var mods_sub = SpectrumMatchFromTsv.ParseModifications(fullSequence) ; 
-            foreach (var sub in mods_sub)
-            {
-                var subMod = sub.Value.FirstOrDefault(s => s.Contains("substitution"));
-                var match = Regex.Match(subMod, @"([A-Z])->([A-Z])");
-                if (match.Success)
-                {
-                    char substitution = match.Groups[2].Value[0];
-                    int position = sub.Key - 1; // Convert to 0-based index
-
-                    // Replace the character at the position
-                    char[] seqArray = modifiedSequence.ToCharArray();
-                    seqArray[position] = substitution;
-                    modifiedSequence = new string(seqArray);
-                }
-            }
-            return modifiedSequence;
-        }
+        //public static string ParseSubstitutedBaseSequence(string fullSequence)
+        //{
+        //    var modifiedFullSeq = ParseSubstitutedFullSequence(fullSequence);
+        //    var modifiedBaseSeq = GetBaseFromFull(modifiedFullSeq);
+        //    return modifiedBaseSeq;
+        //}
 
         public static string ParseSubstitutedFullSequence(string fullSequence)
         {
@@ -925,7 +930,7 @@ namespace Test
             //var modifiedSequence = ParseSubstitutedBaseSequence(seq);
             //var mod4 = ParseSubstitutedFullSequence(seq);
             var seq2 = "IVTEDC[Common Fixed:Carbamidomethyl on C]F[1 nucleotide substitution:F->Y on F]LQIDQSAITGESLAAEK";
-            var modifiedSequence2 = ParseSubstitutedBaseSequence(seq2);
+            //var modifiedSequence2 = ParseSubstitutedBaseSequence(seq2);
             var mod3 = ParseSubstitutedFullSequence(seq2);
         }
 
