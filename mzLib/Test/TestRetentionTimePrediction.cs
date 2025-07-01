@@ -17,6 +17,7 @@ using Plotly.NET;
 using Omics.SpectrumMatch;
 using Transcriptomics;
 using System.Text.RegularExpressions;
+using System.Text;
 
 namespace Test
 {
@@ -835,11 +836,36 @@ namespace Test
             combinedPlot.Show();
         }
 
+        public static string GetBaseFromFull(string fullSequence)
+        {
+            StringBuilder stringBuilder = new StringBuilder();
+            int num = 0;
+            foreach (char c in fullSequence)
+            {
+                switch (c)
+                {
+                    case '[':
+                        num++;
+                        continue;
+                    case ']':
+                        num--;
+                        continue;
+                }
+
+                if (num == 0)
+                {
+                    stringBuilder.Append(c);
+                }
+            }
+
+            return stringBuilder.ToString();
+        }
+
         public static string ParseSubstitutedBaseSequence(string fullSequence)
         {
-            var baseSeq = Regex.Replace(fullSequence, @"\[.*?\]", "");
+            var baseSeq = GetBaseFromFull(fullSequence);
             string modifiedSequence = baseSeq;
-            var mods_sub = SpectrumMatchFromTsv.ParseModifications(fullSequence).Where(v => v.Value.Any(s => s.Contains("substitution"))); 
+            var mods_sub = SpectrumMatchFromTsv.ParseModifications(fullSequence) ; 
             foreach (var sub in mods_sub)
             {
                 var subMod = sub.Value.FirstOrDefault(s => s.Contains("substitution"));
@@ -860,39 +886,45 @@ namespace Test
 
         public static string ParseSubstitutedFullSequence(string fullSequence)
         {
-            var match = Regex.Match(fullSequence, @"\[(\d+)[^\:]*:([A-Z])->([A-Z])");
-            if (match.Success)
+            var subMatch = Regex.Match(fullSequence, @"\[(\d+)[^\:]*:([A-Z])->([A-Z])");
+            if (!subMatch.Success)
+                return fullSequence; // No substitution found
+
+            int position = int.Parse(subMatch.Groups[1].Value) - 1; // 0-based
+            char newAminoAcid = subMatch.Groups[3].Value[0];
+
+            // Remove only the substitution annotation
+            string cleaned = Regex.Replace(fullSequence, @"\[\d+[^\]]*substitution:[A-Z]->[A-Z][^\]]*\]", "");
+
+            // Find the index after the last closing bracket (end of all annotations)
+            int seqStart = cleaned.LastIndexOf(']') + 1;
+            if (seqStart < 0 || seqStart >= cleaned.Length)
+                return cleaned; // No sequence found
+
+            // The sequence is everything after the last bracket
+            string prefix = cleaned.Substring(0, seqStart);
+            string sequence = cleaned.Substring(seqStart);
+
+            // Only substitute if the sequence is long enough
+            if (sequence.Length > position)
             {
-                int position = int.Parse(match.Groups[1].Value) - 1; // 0-based index
-                char newAminoAcid = match.Groups[3].Value[0];
-
-                // Remove only the substitution annotation
-                string cleaned = Regex.Replace(fullSequence, @"\[\d+[^\]]*substitution:[A-Z]->[A-Z][^\]]*\]", "");
-
-                // Find the start of the sequence (after all brackets)
-                int seqStart = cleaned.LastIndexOf(']') + 1;
-                string prefix = cleaned.Substring(0, seqStart);
-                string sequence = cleaned.Substring(seqStart);
-
-                // Replace the amino acid at the specified position
                 char[] seqArray = sequence.ToCharArray();
                 seqArray[position] = newAminoAcid;
                 string modifiedSequence = new string(seqArray);
-
-                // Combine prefix and modified sequence
-                string result = prefix + modifiedSequence;
-                // result: "[UniProt:N-acetylserine on S]SDSQQTITVLEELFR"
-                return result;
+                return prefix + modifiedSequence;
             }
-            return fullSequence;
+
+            // If not long enough, return cleaned string
+            return cleaned;
         }
 
         [Test]
         public static void TestParsing()
         {
-            var seq = "S[1 nucleotide substitution:S->C on S]QEELDEMGAPIDYLTPIVADADAGHGGLTAVFK";
-            var modifiedSequence = ParseSubstitutedBaseSequence(seq);
-            var seq2 = "[UniProt:N-acetylserine on S]S[1 nucleotide substitution:S->T on S]DSQQSITVLEELFR";
+            //var seq = "S[1 nucleotide substitution:S->C on S]QEELDEMGAPIDYLTPIVADADAGHGGLTAVFK";
+            //var modifiedSequence = ParseSubstitutedBaseSequence(seq);
+            //var mod4 = ParseSubstitutedFullSequence(seq);
+            var seq2 = "IVTEDC[Common Fixed:Carbamidomethyl on C]F[1 nucleotide substitution:F->Y on F]LQIDQSAITGESLAAEK";
             var modifiedSequence2 = ParseSubstitutedBaseSequence(seq2);
             var mod3 = ParseSubstitutedFullSequence(seq2);
         }
