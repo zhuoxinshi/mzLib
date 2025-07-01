@@ -14,6 +14,9 @@ using Proteomics.PSM;
 using Readers;
 using Plotly;
 using Plotly.NET;
+using Omics.SpectrumMatch;
+using Transcriptomics;
+using System.Text.RegularExpressions;
 
 namespace Test
 {
@@ -796,24 +799,103 @@ namespace Test
         [Test]
         public static void Predict()
         {
-            var psmFilePath = @"E:\Aneuploidy\DDA\062525\1611-R1-Q_E1-9_calied_xml-gptmd(mods)-xml\Task1-SearchTask\Individual File Results\06-25-25_1611-R1-Q_E1+5-calib_Peptides.psmtsv";
-            var psmtsv = SpectrumMatchTsvReader.ReadPsmTsv(psmFilePath, out List<string> warnings);
+            var psmFilePath = @"E:\Aneuploidy\DDA\062525\1611-R1-Q_E1-9_cali-xml-gptmd(mods+1AAsub)-xml\Task4-SearchTask\Individual File Results\06-25-25_1611-R1-Q_E1+5-calib_Peptides.psmtsv";
+            var psmtsv = SpectrumMatchTsvReader.ReadPsmTsv(psmFilePath, out List<string> warnings).Where(p => p.DecoyContamTarget == "T" && p.QValue <= 0.01);
             var predicted = new List<float>();
-            var pair = new List<(double,float)>();
+            var pair_noSub = new List<(double,float)>();
+            var pair_sub = new List<(double, float)>();
+            var psm_sub = psmtsv.Where(p => p.FullSequence.Contains("substitution")).ToList();
+            var psm_noSub = psmtsv.Where(p => !p.FullSequence.Contains("substitution")).ToList();
             foreach (var peptide in psmtsv)
             {
                 if (peptide.FullSequence.Contains("|"))
                 {
                     continue;
                 }
-                var prediction = ChronologerEstimator.PredictRetentionTime(peptide.BaseSeq, peptide.FullSequence);
-                predicted.Add(prediction);
-                pair.Add((peptide.RetentionTime.Value, prediction));
+                if (peptide.EssentialSeq.Contains("substitution") && SpectrumMatchFromTsv.ParseModifications(peptide.FullSequence).Count == 1)
+                {
+                    var newBaseSeq = ParseSubstitutedBaseSequence(peptide.FullSequence);
+                    var prediction = ChronologerEstimator.PredictRetentionTime(newBaseSeq, peptide.FullSequence);
+                    pair_sub.Add((peptide.RetentionTime.Value, prediction));
+                    var mods = SpectrumMatchFromTsv.ParseModifications(peptide.FullSequence);
+                }
+                else if (!peptide.EssentialSeq.Contains("substitution") && SpectrumMatchFromTsv.ParseModifications(peptide.FullSequence).Count == 0)
+                {
+                    var prediction = ChronologerEstimator.PredictRetentionTime(peptide.BaseSeq, peptide.FullSequence);
+                    pair_noSub.Add((peptide.RetentionTime.Value, prediction));
+                }
             }
-            var scatter = Chart2D.Chart.Point<double, float, string>(
-                            x: pair.Select(p => p.Item1),
-                            y: pair.Select(p => p.Item2)).WithMarkerStyle(Color: Color.fromString("blue"));
-            scatter.Show();
+            var scatter1 = Chart2D.Chart.Point<double, float, string>(
+                            x: pair_noSub.Select(p => p.Item1),
+                            y: pair_noSub.Select(p => p.Item2)).WithMarkerStyle(Color: Color.fromString("blue"));
+            var scatter2 = Chart2D.Chart.Point<double, float, string>(
+                            x: pair_sub.Select(p => p.Item1),
+                            y: pair_sub.Select(p => p.Item2)).WithTraceInfo("substitution").WithMarkerStyle(Color: Color.fromString("red"));
+            var combinedPlot = Chart.Combine(new[] { scatter1, scatter2 });
+            combinedPlot.Show();
         }
+
+        public static string ParseSubstitutedBaseSequence(string fullSequence)
+        {
+            var baseSeq = Regex.Replace(fullSequence, @"\[.*?\]", "");
+            string modifiedSequence = baseSeq;
+            var mods_sub = SpectrumMatchFromTsv.ParseModifications(fullSequence).Where(v => v.Value.Any(s => s.Contains("substitution"))); 
+            foreach (var sub in mods_sub)
+            {
+                var subMod = sub.Value.FirstOrDefault(s => s.Contains("substitution"));
+                var match = Regex.Match(subMod, @"([A-Z])->([A-Z])");
+                if (match.Success)
+                {
+                    char substitution = match.Groups[2].Value[0];
+                    int position = sub.Key - 1; // Convert to 0-based index
+
+                    // Replace the character at the position
+                    char[] seqArray = modifiedSequence.ToCharArray();
+                    seqArray[position] = substitution;
+                    modifiedSequence = new string(seqArray);
+                }
+            }
+            return modifiedSequence;
+        }
+
+        public static string ParseSubstitutedFullSequence(string fullSequence)
+        {
+            var match = Regex.Match(fullSequence, @"\[(\d+)[^\:]*:([A-Z])->([A-Z])");
+            if (match.Success)
+            {
+                int position = int.Parse(match.Groups[1].Value) - 1; // 0-based index
+                char newAminoAcid = match.Groups[3].Value[0];
+
+                // Remove only the substitution annotation
+                string cleaned = Regex.Replace(fullSequence, @"\[\d+[^\]]*substitution:[A-Z]->[A-Z][^\]]*\]", "");
+
+                // Find the start of the sequence (after all brackets)
+                int seqStart = cleaned.LastIndexOf(']') + 1;
+                string prefix = cleaned.Substring(0, seqStart);
+                string sequence = cleaned.Substring(seqStart);
+
+                // Replace the amino acid at the specified position
+                char[] seqArray = sequence.ToCharArray();
+                seqArray[position] = newAminoAcid;
+                string modifiedSequence = new string(seqArray);
+
+                // Combine prefix and modified sequence
+                string result = prefix + modifiedSequence;
+                // result: "[UniProt:N-acetylserine on S]SDSQQTITVLEELFR"
+                return result;
+            }
+            return fullSequence;
+        }
+
+        [Test]
+        public static void TestParsing()
+        {
+            var seq = "S[1 nucleotide substitution:S->C on S]QEELDEMGAPIDYLTPIVADADAGHGGLTAVFK";
+            var modifiedSequence = ParseSubstitutedBaseSequence(seq);
+            var seq2 = "[UniProt:N-acetylserine on S]S[1 nucleotide substitution:S->T on S]DSQQSITVLEELFR";
+            var modifiedSequence2 = ParseSubstitutedBaseSequence(seq2);
+            var mod3 = ParseSubstitutedFullSequence(seq2);
+        }
+
     }
 }
