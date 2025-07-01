@@ -10,6 +10,10 @@ using Omics.Modifications;
 using TopDownProteomics;
 using Stopwatch = System.Diagnostics.Stopwatch;
 using Proteomics.RetentionTimePrediction.ChronologerModel;
+using Proteomics.PSM;
+using Readers;
+using Plotly;
+using Plotly.NET;
 
 namespace Test
 {
@@ -787,6 +791,29 @@ namespace Test
             Assert.That(noMods[5] == -1);
             Assert.That(noMods[6] == -1);
 
+        }
+
+        [Test]
+        public static void Predict()
+        {
+            var psmFilePath = @"E:\Aneuploidy\DDA\062525\1611-R1-Q_E1-9_calied_xml-gptmd(mods)-xml\Task1-SearchTask\Individual File Results\06-25-25_1611-R1-Q_E1+5-calib_Peptides.psmtsv";
+            var psmtsv = SpectrumMatchTsvReader.ReadPsmTsv(psmFilePath, out List<string> warnings);
+            var predicted = new List<float>();
+            var pair = new List<(double,float)>();
+            foreach (var peptide in psmtsv)
+            {
+                if (peptide.FullSequence.Contains("|"))
+                {
+                    continue;
+                }
+                var prediction = ChronologerEstimator.PredictRetentionTime(peptide.BaseSeq, peptide.FullSequence);
+                predicted.Add(prediction);
+                pair.Add((peptide.RetentionTime.Value, prediction));
+            }
+            var scatter = Chart2D.Chart.Point<double, float, string>(
+                            x: pair.Select(p => p.Item1),
+                            y: pair.Select(p => p.Item2)).WithMarkerStyle(Color: Color.fromString("blue"));
+            scatter.Show();
         }
     }
 }
