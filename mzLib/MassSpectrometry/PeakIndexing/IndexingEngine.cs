@@ -16,7 +16,7 @@ namespace MassSpectrometry
         /// Jagged array. Each index of the array corresponds to a mass bin. Each element of the array is a list of peaks that fall within that mass bin.
         /// Peaks within each mass bin are ordered by scan number, ascending. Due to the width of the mass bin, it is possible to have multiple peaks with the same scan number but different masses in a list
         /// </summary>
-        protected List<T>[]? IndexedPeaks;
+        public List<T>[]? IndexedPeaks;
         protected virtual int BinsPerDalton => 100;
         public ScanInfo[]? ScanInfoArray { get; private set; }
 
@@ -89,7 +89,7 @@ namespace MassSpectrometry
         /// <param name="missedScansAllowed"> the number of successive missed scans allowed before the xic is terminated </param>
         /// <param name="maxPeakHalfWidth"> the maximum distance from the apex RT of the XIC to both start RT and end RT </param>
         /// <returns> A list of IIndexedPeak objects, ordered by retention time </returns>
-        public List<IIndexedPeak> GetXic(double mz, double retentionTime, PpmTolerance ppmTolerance, int missedScansAllowed, double maxPeakHalfWidth = double.MaxValue)
+        public List<IIndexedPeak> GetXic(double mz, double retentionTime, Tolerance ppmTolerance, int missedScansAllowed, double maxPeakHalfWidth = double.MaxValue)
         {
             // get precursor scan to start at
             int scanIndex = -1;
