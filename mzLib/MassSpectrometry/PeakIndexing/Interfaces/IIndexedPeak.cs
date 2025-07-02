@@ -17,9 +17,5 @@
         /// Represents the mass, either as m/z or a neutral mass, depending on the context
         /// </summary>
         public double M { get; }
-        /// <summary>
-        /// The chromatographic trace of this peak
-        /// </summary>
-        public ExtractedIonChromatogram XIC { get; set; }
     }
 }

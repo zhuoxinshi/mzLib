@@ -102,5 +102,11 @@ namespace Test
             var ex2 = Assert.Throws<MzLibException>(() => cubicSpline.GetXicSplineData(rtArray, intensityArray2, 1.0, 1.2));
             Assert.That(ex2.Message, Is.EqualTo("Input arrays must have the same length."));
         }
+
+        [Test]
+        public static void TestGetAllXics()
+        {
+
+        }
     }
 }

@@ -16,7 +16,7 @@ namespace MassSpectrometry
         /// Jagged array. Each index of the array corresponds to a mass bin. Each element of the array is a list of peaks that fall within that mass bin.
         /// Peaks within each mass bin are ordered by scan number, ascending. Due to the width of the mass bin, it is possible to have multiple peaks with the same scan number but different masses in a list
         /// </summary>
-        public List<T>[]? IndexedPeaks;
+        protected List<T>[]? IndexedPeaks;
         protected virtual int BinsPerDalton => 100;
         public ScanInfo[]? ScanInfoArray { get; private set; }
 
@@ -191,6 +191,25 @@ namespace MassSpectrometry
             return xic;
         }
 
+        public List<ExtractedIonChromatogram> GetAllXICs(Tolerance peakFindingTolerance, int maxMissedScanAllowed, double maxRTRange, int numPeakThreshold)
+        {
+            var xics = new List<ExtractedIonChromatogram>();
+            var matchedPeaks = new Dictionary<IIndexedPeak, ExtractedIonChromatogram>();
+            var sortedPeaks = IndexedPeaks.Where(v => v != null).SelectMany(peaks => peaks).OrderBy(p => p.Intensity).ToList();
+            foreach (var peak in sortedPeaks)
+            {
+                if (!matchedPeaks.ContainsKey(peak))
+                {
+                    var peakList = GetXic(peak.M, peak.RetentionTime, peakFindingTolerance, maxMissedScanAllowed, maxRTRange);
+                    if (peakList.Count >= numPeakThreshold)
+                    {
+                        var newXIC = new ExtractedIonChromatogram(peakList);
+                        matchedPeaks.Add(peak, newXIC);
+                    }
+                }
+            }
+            return xics;
+        }
         #region Peak finding helper functions
 
         internal List<List<T>> GetBinsInRange(double mz, PpmTolerance ppmTolerance)

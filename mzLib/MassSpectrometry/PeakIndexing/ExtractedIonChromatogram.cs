@@ -55,27 +55,6 @@ namespace MassSpectrometry
             NormalizedPeakIntensities = Peaks.Select(p => p.Intensity / sumIntensity * 100).ToArray();
         }
 
-        public static List<ExtractedIonChromatogram> GetAllXICsFromIndexedPeaks(IndexingEngine<IIndexedPeak> indexingEngine, Tolerance peakFindingTolerance, int maxMissedScanAllowed, double maxRTRange, int numPeakThreshold = 2)
-        {
-            var xics = new List<ExtractedIonChromatogram>();
-            var sortedPeaks = indexingEngine.IndexedPeaks.SelectMany(peaks => peaks).OrderBy(p => p.Intensity).ToList();
-            foreach(var peak in sortedPeaks)
-            {
-                if (peak.XIC == null)
-                {
-                    var peakList = indexingEngine.GetXic(peak.M, peak.RetentionTime, peakFindingTolerance, maxMissedScanAllowed, maxRTRange);
-                    if (peakList.Count >= numPeakThreshold)
-                    {
-                        var newXIC = new ExtractedIonChromatogram(peakList);
-                        foreach(var p in peakList)
-                        {
-                            p.XIC = newXIC; 
-                        }
-                        xics.Add(newXIC);
-                    }
-                }
-            }
-            return xics;
-        }
+        
     }
 }
