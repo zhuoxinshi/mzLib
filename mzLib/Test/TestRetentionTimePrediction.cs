@@ -800,7 +800,7 @@ namespace Test
         [Test]
         public static void Predict()
         {
-            var psmFilePath = @"E:\Aneuploidy\DDA\062525\1611+1614_E1-8_search-cali-search-gptmd(mod)-search_truncation\Task5-SearchTask\Individual File Results\06-26-25_1614-R1-Q_E1+5-calib_Peptides.psmtsv";
+            var psmFilePath = @"E:\Aneuploidy\DDA\062525\1611+1614_E1-8_calied-gptmd(1NAsubOnly)-search_truncation\Task2-SearchTask\Individual File Results\06-26-25_1614-R1-Q_E1+5-calib_Peptides.psmtsv";
             var psmtsv = SpectrumMatchTsvReader.ReadPsmTsv(psmFilePath, out List<string> warnings).Where(p => p.DecoyContamTarget == "T" && p.QValue <= 0.01);
             var predicted = new List<float>();
             var pair_noSub = new List<(double,float)>();
@@ -813,14 +813,14 @@ namespace Test
                 {
                     continue;
                 }
-                if (peptide.EssentialSeq.Contains("substitution") && SpectrumMatchFromTsv.ParseModifications(peptide.FullSequence).Count == 1)
+                if (peptide.EssentialSeq.Contains("substitution"))
                 {
                     var newFullSeq = ParseSubstitutedFullSequence(peptide.FullSequence);
                     var newBaseSeq = GetBaseFromFull(newFullSeq);
                     var prediction = ChronologerEstimator.PredictRetentionTime(newBaseSeq, newFullSeq);
                     pair_sub.Add((peptide.RetentionTime.Value, prediction));
                 }
-                else if (!peptide.EssentialSeq.Contains("substitution") && SpectrumMatchFromTsv.ParseModifications(peptide.FullSequence).Count == 0)
+                else if (!peptide.EssentialSeq.Contains("substitution"))//&& SpectrumMatchFromTsv.ParseModifications(peptide.FullSequence).Count == 0
                 {
                     var prediction = ChronologerEstimator.PredictRetentionTime(peptide.BaseSeq, peptide.FullSequence);
                     pair_noSub.Add((peptide.RetentionTime.Value, prediction));
@@ -839,7 +839,7 @@ namespace Test
         [Test]
         public static void PredictAll()
         {
-            var psmFilePath = @"E:\Aneuploidy\DDA\062525\1611+1614_E1-8_search-cali-search-gptmd(mod)-search_truncation\Task5-SearchTask\Individual File Results\06-26-25_1614-R1-Q_E1+5-calib_Peptides.psmtsv";
+            var psmFilePath = @"E:\Aneuploidy\DDA\062525\1611+1614_E1-8_calied-gptmd(1NAsubOnly)-search_truncation\Task2-SearchTask\Individual File Results\06-25-25_1611-R1-Q_E1+5-calib_Peptides.psmtsv";
             var psmtsv = SpectrumMatchTsvReader.ReadPsmTsv(psmFilePath, out List<string> warnings).Where(p => p.DecoyContamTarget == "T" && p.QValue <= 0.01);
             var pair = new List<(double, float)>();
             foreach (var peptide in psmtsv)
