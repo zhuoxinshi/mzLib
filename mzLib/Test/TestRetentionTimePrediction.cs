@@ -839,7 +839,7 @@ namespace Test
         [Test]
         public static void PredictAll()
         {
-            var psmFilePath = @"E:\Aneuploidy\DDA\062525\1611+1614_E1-8_calied-gptmd(1NAsubOnly)-search_truncation\Task2-SearchTask\Individual File Results\06-25-25_1611-R1-Q_E1+5-calib_Peptides.psmtsv";
+            var psmFilePath = @"E:\Aneuploidy\DDA\062525\1611-R1-Q_E1-9_calied_xml-gptmd(mods)-xml\Task1-SearchTask\Individual File Results\06-25-25_1611-R1-Q_E1+5-calib_Peptides.psmtsv";
             var psmtsv = SpectrumMatchTsvReader.ReadPsmTsv(psmFilePath, out List<string> warnings).Where(p => p.DecoyContamTarget == "T" && p.QValue <= 0.01);
             var pair = new List<(double, float)>();
             foreach (var peptide in psmtsv)
