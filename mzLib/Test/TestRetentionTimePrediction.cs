@@ -800,7 +800,7 @@ namespace Test
         [Test]
         public static void Predict()
         {
-            var psmFilePath = @"E:\Aneuploidy\DDA\062525\1611+1614_E1-8_calied-gptmd(1NAsubOnly)-search_truncation\Task2-SearchTask\Individual File Results\06-26-25_1614-R1-Q_E1+5-calib_Peptides.psmtsv";
+            var psmFilePath = @"E:\Aneuploidy\DDA\062525\1611+1614_E1-8_calied-gptmd(1NAsubOnly)-search_truncation\Task2-SearchTask\Individual File Results\06-26-25_1614-R1-Q_E2+6-calib_Peptides.psmtsv";
             var psmtsv = SpectrumMatchTsvReader.ReadPsmTsv(psmFilePath, out List<string> warnings).Where(p => p.DecoyContamTarget == "T" && p.QValue <= 0.01);
             var predicted = new List<float>();
             var pair_noSub = new List<(double,float)>();
