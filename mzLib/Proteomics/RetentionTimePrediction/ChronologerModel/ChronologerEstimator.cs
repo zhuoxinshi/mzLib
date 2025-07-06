@@ -337,7 +337,7 @@ namespace Proteomics.RetentionTimePrediction.Chronologer
                 {('(', "Pyro-carbamidomethyl on C"), 40}, //S-carbamidomethylcysteine
                 {(')', "pyroglutamate"), 41},
                 {('&', "N-terminal TMT0"), 42},
-                {('&', "N-terminal TMT10"), 43},
+                {('*', "N-terminal TMT10"), 43},
                 {('_', "Free C-terminal"), 44},
             };
     }
