@@ -860,6 +860,7 @@ namespace Test
             var psmtsv_noSub_1611 = SpectrumMatchTsvReader.ReadPsmTsv(psmFilePath_noSub_1611, out List<string> warnings4).Where(p => p.DecoyContamTarget == "T" && p.QValue <= 0.01).ToList();
 
             var filteredPsm_sub_1614 = new List<PsmFromTsv>();
+            var fileteredPsm_sub_1614_noMod = new List<PsmFromTsv>();
             foreach (var psm in psmtsv_sub_1614)
             {
                 if (psm.FullSequence.Contains("|"))
@@ -871,6 +872,10 @@ namespace Test
                     continue;
                 }
                 filteredPsm_sub_1614.Add(psm);
+                if (!ParseSubstitutedFullSequence(psm.FullSequence).Contains("["))
+                {
+                    fileteredPsm_sub_1614_noMod.Add(psm);
+                }
             }
 
             var filteredPsm_sub_1611 = new List<PsmFromTsv>();
@@ -932,6 +937,16 @@ namespace Test
             string outPath = @"E:\Aneuploidy\DDA\062525\RtPredictionResults\1614_filtered.tsv";
             resultFile1614.WriteResults(outPath);
 
+            //predict peptide fragmentation
+            var sequences = new List<Ms2PipSequence>();
+            foreach(var pep in filteredPep_sub_1614)
+            {
+                var seq = new Ms2PipSequence(pep.First());
+                sequences.Add(seq);
+            }
+            var seqFile = new Ms2PipSequenceFile { Results = sequences };
+            string seqOutPath = @"E:\Aneuploidy\DDA\062525\RtPredictionResults\1614_filtered_sub_sequences.txt";
+            seqFile.WriteResults(seqOutPath);
             //var scatter2 = Chart2D.Chart.Point<double, float, string>(
             //                x: prediction_1614_sub.Select(p => p.Item1),
             //                y: prediction_1614_sub.Select(p => p.Item2)).WithMarkerStyle(Color: Color.fromString("green"));
@@ -1149,5 +1164,64 @@ namespace Test
             public override SupportedFileType FileType { get; }
             public override Software Software { get; set; }
         }
+
+        public class Ms2PipSequence
+        {
+            public int spec_id { get; set; }
+            public string modifications { get; set; }
+            public string peptide { get; set; }
+            public int charge { get; set; }
+
+            public Ms2PipSequence(int ms2ScanNumber, string modifications, string sequence, int charge)
+            {
+                spec_id = ms2ScanNumber;
+                modifications = modifications;
+                peptide = sequence;
+                charge = charge;
+            }
+
+            public Ms2PipSequence(PsmFromTsv psmTsv, string modifications = "-")
+            {
+                spec_id = psmTsv.Ms2ScanNumber;
+                this.modifications = modifications;
+                peptide = ParseSubstitutedFullSequence(psmTsv.FullSequence);
+                charge = psmTsv.PrecursorCharge;
+            }
+            public Ms2PipSequence() { }
+        }
+
+        public class Ms2PipSequenceFile : ResultFile<Ms2PipSequence>, IResultFile
+        {
+            public static CsvConfiguration CsvConfiguration = new CsvConfiguration(CultureInfo.InvariantCulture)
+            {
+                Delimiter = "\t",
+            };
+
+            public Ms2PipSequenceFile() : base() { }
+            public Ms2PipSequenceFile(string filePath) : base(filePath, Software.Unspecified) { }
+
+            public override void LoadResults()
+            {
+                using var csv = new CsvReader(new StreamReader(FilePath), CsvConfiguration);
+                Results = csv.GetRecords<Ms2PipSequence>().ToList();
+            }
+
+            public string FullFileName { get; set; }
+            public override void WriteResults(string outputPath)
+            {
+                using var csv = new CsvWriter(new StreamWriter(File.Create(outputPath)), CsvConfiguration);
+
+                csv.WriteHeader<Ms2PipSequence>();
+                foreach (var result in Results)
+                {
+                    csv.NextRecord();
+                    csv.WriteRecord(result);
+                }
+            }
+
+            public override SupportedFileType FileType { get; }
+            public override Software Software { get; set; }
+        }
+
     }
 }
