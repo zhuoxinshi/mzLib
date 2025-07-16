@@ -813,7 +813,7 @@ namespace Test
             var psmFilePath = @"E:\Aneuploidy\DDA\062525\1611+1614_E1-8_calied-gptmd(1NAsubOnly)-search_truncation\Task2-SearchTask\Individual File Results\06-26-25_1614-R1-Q_E2+6-calib_Peptides.psmtsv";
             var psmtsv = SpectrumMatchTsvReader.ReadPsmTsv(psmFilePath, out List<string> warnings).Where(p => p.DecoyContamTarget == "T" && p.QValue <= 0.01);
             var predicted = new List<float>();
-            var pair_noSub = new List<(double,float)>();
+            var pair_noSub = new List<(double, float)>();
             var pair_sub = new List<(double, float)>();
             var psm_sub = psmtsv.Where(p => p.FullSequence.Contains("substitution")).ToList();
             var psm_noSub = psmtsv.Where(p => !p.FullSequence.Contains("substitution")).ToList();
@@ -896,7 +896,7 @@ namespace Test
             var pep_sub_1614 = SpectrumMatchTsvReader.ReadPsmTsv(pepFilePath_sub_1614, out List<string> warnings5).Where(p => p.DecoyContamTarget == "T" && p.QValue <= 0.01).ToList();
             var pep_1614_noMod = pep_sub_1614.Where(p => !p.FullSequence.Contains("[") && !p.FullSequence.Contains("|")).ToList();
             var calibration_1614 = new List<(double, float)>();
-            foreach(var pep in pep_1614_noMod)
+            foreach (var pep in pep_1614_noMod)
             {
                 var prediction = ChronologerEstimator.PredictRetentionTime(pep.BaseSeq, pep.FullSequence);
                 calibration_1614.Add((pep.RetentionTime.Value, prediction));
@@ -929,24 +929,38 @@ namespace Test
                     newScanNum++;
                 }
             }
+            //write new filtered spectra file
             var spectraOutPath = @"E:\Aneuploidy\DDA\062525\RtPredictionResults\filteredSpectra.mzML";
             SourceFile genericSourceFile = new SourceFile("no nativeID format", "mzML format", null, null, null);
             GenericMsDataFile msFileCombined = new GenericMsDataFile(filteredScans.ToArray(), genericSourceFile);
             msFileCombined.ExportAsMzML(spectraOutPath, false);
-            var resultFile1614 = new RtPredictionResultsFile {Results = results1614 };
+            var resultFile1614 = new RtPredictionResultsFile { Results = results1614 };
             string outPath = @"E:\Aneuploidy\DDA\062525\RtPredictionResults\1614_filtered.tsv";
-            resultFile1614.WriteResults(outPath);
+            //resultFile1614.WriteResults(outPath);
 
-            //predict peptide fragmentation
-            var sequences = new List<Ms2PipSequence>();
-            foreach(var pep in filteredPep_sub_1614)
+
+
+            //write out peptide sequences to predict peptide fragmentation
+            //var sequences = new List<Ms2PipSequence>();
+            var filteredPep_sub_1614_noMod = filteredPep_sub_1614.Where(g => !ParseSubstitutedFullSequence(g.Key).Contains("[")).ToList();
+            //foreach (var pep in filteredPep_sub_1614_noMod)
+            //{
+            //    var seq = new Ms2PipSequence(pep.First());
+            //    sequences.Add(seq);
+            //}
+            //var seqFile = new Ms2PipSequenceFile { Results = sequences };
+            //string seqOutPath = @"E:\Aneuploidy\DDA\062525\RtPredictionResults\1614_filtered_sub_sequences.tsv";
+            //seqFile.WriteResults(seqOutPath);
+            var inputs = new List<Ms2PipInput>();
+            foreach(var pep in filteredPep_sub_1614_noMod)
             {
-                var seq = new Ms2PipSequence(pep.First());
-                sequences.Add(seq);
+                var input = new Ms2PipInput(pep.First());
+                inputs.Add(input);
             }
-            var seqFile = new Ms2PipSequenceFile { Results = sequences };
-            string seqOutPath = @"E:\Aneuploidy\DDA\062525\RtPredictionResults\1614_filtered_sub_sequences.txt";
-            seqFile.WriteResults(seqOutPath);
+            var inputFile = new Ms2PipInputFile { Results = inputs };
+            string inputOutPath = @"E:\Aneuploidy\DDA\062525\RtPredictionResults\1614_filtered_sub_inputs.tsv";
+            inputFile.WriteResults(inputOutPath);
+            //PeprecWriter.WritePeprecFile(seqOutPath, sequences);
             //var scatter2 = Chart2D.Chart.Point<double, float, string>(
             //                x: prediction_1614_sub.Select(p => p.Item1),
             //                y: prediction_1614_sub.Select(p => p.Item2)).WithMarkerStyle(Color: Color.fromString("green"));
@@ -1167,22 +1181,22 @@ namespace Test
 
         public class Ms2PipSequence
         {
-            public int spec_id { get; set; }
+            public string spec_id { get; set; }
             public string modifications { get; set; }
             public string peptide { get; set; }
             public int charge { get; set; }
 
             public Ms2PipSequence(int ms2ScanNumber, string modifications, string sequence, int charge)
             {
-                spec_id = ms2ScanNumber;
-                modifications = modifications;
+                spec_id = "scan" + ms2ScanNumber.ToString();
+                this.modifications = modifications;
                 peptide = sequence;
-                charge = charge;
+                this.charge = charge;
             }
 
             public Ms2PipSequence(PsmFromTsv psmTsv, string modifications = "-")
             {
-                spec_id = psmTsv.Ms2ScanNumber;
+                spec_id = "scan" + psmTsv.Ms2ScanNumber.ToString();
                 this.modifications = modifications;
                 peptide = ParseSubstitutedFullSequence(psmTsv.FullSequence);
                 charge = psmTsv.PrecursorCharge;
@@ -1190,6 +1204,22 @@ namespace Test
             public Ms2PipSequence() { }
         }
 
+        public class PeprecWriter
+        {
+            public static void WritePeprecFile(string path, List<Ms2PipSequence> entries)
+            {
+                using (var writer = new StreamWriter(path))
+                {
+                    // Write header
+                    writer.WriteLine("spec_id modifications peptide charge");
+                    // Write data rows
+                    foreach (var entry in entries)
+                    {
+                        writer.WriteLine($"{entry.spec_id} {entry.modifications} {entry.peptide} {entry.charge}");
+                    }
+                }
+            }
+        }
         public class Ms2PipSequenceFile : ResultFile<Ms2PipSequence>, IResultFile
         {
             public static CsvConfiguration CsvConfiguration = new CsvConfiguration(CultureInfo.InvariantCulture)
@@ -1223,5 +1253,50 @@ namespace Test
             public override Software Software { get; set; }
         }
 
+        public class Ms2PipInput
+        {
+            public string peptidoform { get; set; }
+            public string spectrum_id { get; set; }
+
+            public Ms2PipInput(PsmFromTsv psmTsv)
+            {
+                peptidoform = IBioPolymerWithSetMods.GetBaseSequenceFromFullSequence(ParseSubstitutedFullSequence(psmTsv.FullSequence));
+                spectrum_id = "scan" + psmTsv.Ms2ScanNumber.ToString();
+            }
+            public Ms2PipInput() { }
+        }
+
+        public class Ms2PipInputFile : ResultFile<Ms2PipInput>, IResultFile
+        {
+            public static CsvConfiguration CsvConfiguration = new CsvConfiguration(CultureInfo.InvariantCulture)
+            {
+                Delimiter = "\t",
+            };
+
+            public Ms2PipInputFile() : base() { }
+            public Ms2PipInputFile(string filePath) : base(filePath, Software.Unspecified) { }
+
+            public override void LoadResults()
+            {
+                using var csv = new CsvReader(new StreamReader(FilePath), CsvConfiguration);
+                Results = csv.GetRecords<Ms2PipInput>().ToList();
+            }
+
+            public string FullFileName { get; set; }
+            public override void WriteResults(string outputPath)
+            {
+                using var csv = new CsvWriter(new StreamWriter(File.Create(outputPath)), CsvConfiguration);
+
+                csv.WriteHeader<Ms2PipInput>();
+                foreach (var result in Results)
+                {
+                    csv.NextRecord();
+                    csv.WriteRecord(result);
+                }
+            }
+
+            public override SupportedFileType FileType { get; }
+            public override Software Software { get; set; }
+        }
     }
 }
