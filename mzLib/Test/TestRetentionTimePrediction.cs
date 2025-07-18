@@ -28,6 +28,8 @@ using System.Globalization;
 using System.IO;
 using MassSpectrometry;
 using System.ComponentModel;
+using System.Windows;
+using System.Windows.Shapes;
 
 namespace Test
 {
@@ -854,95 +856,21 @@ namespace Test
             var psmFilePath_noSub_1614 = @"E:\Aneuploidy\DDA\062525\1614_E1-8_cali-gptmd(bioMods)-xml+trunc\Task2-SearchTask\Individual File Results\06-26-25_1614-R1-Q_E1+5-calib_PSMs.psmtsv";
             var psmtsv_noSub_1614 = SpectrumMatchTsvReader.ReadPsmTsv(psmFilePath_noSub_1614, out List<string> warnings2).Where(p => p.DecoyContamTarget == "T" && p.QValue <= 0.01).ToList();
 
-            var psmFilePath_sub_1611 = @"E:\Aneuploidy\DDA\062525\1611_E1-8_cali-gptmd(bioMods+1NAsub)-xml+trunc\Task3-SearchTask\Individual File Results\06-25-25_1611-R1-Q_E1+5-calib_PSMs.psmtsv";
-            var psmtsv_sub_1611 = SpectrumMatchTsvReader.ReadPsmTsv(psmFilePath_sub_1611, out List<string> warnings3).Where(p => p.DecoyContamTarget == "T" && p.QValue <= 0.01).ToList();
-            var psmFilePath_noSub_1611 = @"E:\Aneuploidy\DDA\062525\1611_E1-8_calied-gptmd(bioMods)-xml+trunc\Task2-SearchTask\Individual File Results\06-25-25_1611-R1-Q_E1+5-calib_PSMs.psmtsv";
-            var psmtsv_noSub_1611 = SpectrumMatchTsvReader.ReadPsmTsv(psmFilePath_noSub_1611, out List<string> warnings4).Where(p => p.DecoyContamTarget == "T" && p.QValue <= 0.01).ToList();
+            //filter out PSMs where the predicted RT is considered as an outlier
+            var rtFilteredPsms_1614 = FilterPsmTsvFromPredictedRT(psmtsv_sub_1614, 1, 1.96, out List<(int, string, double, float)> filteredPredictions);
+            //PlotPredictedRt(filteredPredictions).Show();
 
-            var filteredPsm_sub_1614 = new List<PsmFromTsv>();
-            var fileteredPsm_sub_1614_noMod = new List<PsmFromTsv>();
-            foreach (var psm in psmtsv_sub_1614)
-            {
-                if (psm.FullSequence.Contains("|"))
-                {
-                    continue;
-                }
-                if (psmtsv_noSub_1614.Any(p => p.Ms2ScanNumber == psm.Ms2ScanNumber && p.PrecursorCharge == psm.PrecursorCharge && Math.Round(p.PrecursorMass, 2) == Math.Round(psm.PrecursorMass, 2)))
-                {
-                    continue;
-                }
-                filteredPsm_sub_1614.Add(psm);
-                if (!ParseSubstitutedFullSequence(psm.FullSequence).Contains("["))
-                {
-                    fileteredPsm_sub_1614_noMod.Add(psm);
-                }
-            }
+            //filter out PSMs that can be explained by other PTMs
+            var filteredPsm_sub_1614 = FilterUniquePsmTsv(rtFilteredPsms_1614, psmtsv_noSub_1614);
 
-            var filteredPsm_sub_1611 = new List<PsmFromTsv>();
-            foreach (var psm in psmtsv_sub_1611)
-            {
-                if (psm.FullSequence.Contains("|"))
-                {
-                    continue;
-                }
-                if (psmtsv_noSub_1611.Any(p => p.Ms2ScanNumber == psm.Ms2ScanNumber && p.PrecursorCharge == psm.PrecursorCharge && Math.Round(p.PrecursorMass, 2) == Math.Round(psm.PrecursorMass, 2)))
-                {
-                    continue;
-                }
-                filteredPsm_sub_1611.Add(psm);
-            }
-
-            var pepFilePath_sub_1614 = @"E:\Aneuploidy\DDA\062525\1614_E1-8_cali-gptmd(bioMods+1NAsub)-xml+trunc\Task3-SearchTask\Individual File Results\06-26-25_1614-R1-Q_E1+5-calib_Peptides.psmtsv";
-            var pep_sub_1614 = SpectrumMatchTsvReader.ReadPsmTsv(pepFilePath_sub_1614, out List<string> warnings5).Where(p => p.DecoyContamTarget == "T" && p.QValue <= 0.01).ToList();
-            var pep_1614_noMod = pep_sub_1614.Where(p => !p.FullSequence.Contains("[") && !p.FullSequence.Contains("|")).ToList();
-            var calibration_1614 = new List<(double, float)>();
-            foreach (var pep in pep_1614_noMod)
-            {
-                var prediction = ChronologerEstimator.PredictRetentionTime(pep.BaseSeq, pep.FullSequence);
-                calibration_1614.Add((pep.RetentionTime.Value, prediction));
-            }
-            var (intercept, slope) = Fit.Line(calibration_1614.Select(p => p.Item1).ToArray(), calibration_1614.Select(p => (double)p.Item2).ToArray());
-
-            var prediction_1614_sub = new List<(double, float)>();
-            var filteredPep_sub_1614 = filteredPsm_sub_1614.OrderByDescending(p => p.Score).GroupBy(p => p.FullSequence).ToList();
-            var results1614 = new List<RtPredictionResult>();
-            var sd_1614_cali = calibration_1614.Select(p => p.Item2).StandardDeviation();
-            var rtFiletered_1614_sub = prediction_1614_sub.Where(p => Math.Abs(p.Item2 - (intercept + slope * p.Item1)) <= 1 * sd_1614_cali).ToList();
-            var rawFilePath = @"E:\Aneuploidy\DDA\062525\06-26-25_1614-R1-Q_E1+5.raw";
-            var dataFile = MsDataFileReader.GetDataFile(rawFilePath);
-            var scans = dataFile.GetAllScansList();
-            var filteredScans = new List<MsDataScan>();
-            int newScanNum = 1;
-            foreach (var pep in filteredPsm_sub_1614)
-            {
-                var newFullSeq = ParseSubstitutedFullSequence(pep.FullSequence);
-                var newBaseSeq = IBioPolymerWithSetMods.GetBaseSequenceFromFullSequence(newFullSeq);
-                var prediction = ChronologerEstimator.PredictRetentionTime(newBaseSeq, newFullSeq);
-                prediction_1614_sub.Add((pep.RetentionTime.Value, prediction));
-                var result = new RtPredictionResult(pep, prediction);
-                if (Math.Abs(prediction - (intercept + slope * pep.RetentionTime.Value)) <= 1 * sd_1614_cali)
-                {
-                    results1614.Add(result);
-                    var theScan = scans.FirstOrDefault(s => s.OneBasedScanNumber == pep.Ms2ScanNumber);
-                    var newScan = new MsDataScan(theScan.MassSpectrum, newScanNum, theScan.MsnOrder, true, Polarity.Positive, theScan.RetentionTime, theScan.IsolationRange, theScan.ScanFilter, MZAnalyzerType.Unknown, theScan.MassSpectrum.SumOfAllY, null, null, theScan.NativeId, selectedIonMz: pep.PrecursorMz, selectedIonChargeStateGuess: pep.PrecursorCharge, dissociationType: DissociationType.Unknown);
-                    filteredScans.Add(newScan);
-                    newScanNum++;
-                }
-            }
-            //write new filtered spectra file
+            //write Ms2Pip input file for spectra prediction
             var spectraOutPath = @"E:\Aneuploidy\DDA\062525\RtPredictionResults\filteredSpectra.mzML";
-            SourceFile genericSourceFile = new SourceFile("no nativeID format", "mzML format", null, null, null);
-            GenericMsDataFile msFileCombined = new GenericMsDataFile(filteredScans.ToArray(), genericSourceFile);
-            msFileCombined.ExportAsMzML(spectraOutPath, false);
-            var resultFile1614 = new RtPredictionResultsFile { Results = results1614 };
-            string outPath = @"E:\Aneuploidy\DDA\062525\RtPredictionResults\1614_filtered.tsv";
-            //resultFile1614.WriteResults(outPath);
 
 
 
             //write out peptide sequences to predict peptide fragmentation
             //var sequences = new List<Ms2PipSequence>();
-            var filteredPep_sub_1614_noMod = filteredPep_sub_1614.Where(g => !ParseSubstitutedFullSequence(g.Key).Contains("[")).ToList();
+            //var filteredPep_sub_1614_noMod = filteredPep_sub_1614.Where(g => !ParseSubstitutedFullSequence(g.Key).Contains("[")).ToList();
             //foreach (var pep in filteredPep_sub_1614_noMod)
             //{
             //    var seq = new Ms2PipSequence(pep.First());
@@ -951,15 +879,6 @@ namespace Test
             //var seqFile = new Ms2PipSequenceFile { Results = sequences };
             //string seqOutPath = @"E:\Aneuploidy\DDA\062525\RtPredictionResults\1614_filtered_sub_sequences.tsv";
             //seqFile.WriteResults(seqOutPath);
-            var inputs = new List<Ms2PipInput>();
-            foreach(var pep in filteredPep_sub_1614_noMod)
-            {
-                var input = new Ms2PipInput(pep.First());
-                inputs.Add(input);
-            }
-            var inputFile = new Ms2PipInputFile { Results = inputs };
-            string inputOutPath = @"E:\Aneuploidy\DDA\062525\RtPredictionResults\1614_filtered_sub_inputs.tsv";
-            inputFile.WriteResults(inputOutPath);
             //PeprecWriter.WritePeprecFile(seqOutPath, sequences);
             //var scatter2 = Chart2D.Chart.Point<double, float, string>(
             //                x: prediction_1614_sub.Select(p => p.Item1),
@@ -981,50 +900,123 @@ namespace Test
             //                    y: rtFiletered_1614_sub.Select(p => p.Item2)).WithMarkerStyle(Color: Color.fromString("green"));
             //var combined = Chart.Combine(new[] { scatter1, scatter3, });
             //combined.Show();
+        }
 
+        public static List<PsmFromTsv> FilterUniquePsmTsv(List<PsmFromTsv> psmsWithSub, List<PsmFromTsv> psmsWithoutSub)
+        {
+            var filteredPsms = new List<PsmFromTsv>();
+            foreach (var psm in psmsWithSub)
+            {
+                if (psm.FullSequence.Contains("|"))
+                {
+                    continue;
+                }
+                if (psmsWithoutSub.Any(p => p.Ms2ScanNumber == psm.Ms2ScanNumber && p.PrecursorCharge == psm.PrecursorCharge && Math.Round(p.PrecursorMass, 2) == Math.Round(psm.PrecursorMass, 2)))
+                {
+                    continue;
+                }
+                filteredPsms.Add(psm);
+            }
+            return filteredPsms;
+        }
 
-            var pepFilePath_sub_1611 = @"E:\Aneuploidy\DDA\062525\1611_E1-8_cali-gptmd(bioMods+1NAsub)-xml+trunc\Task3-SearchTask\Individual File Results\06-25-25_1611-R1-Q_E1+5-calib_Peptides.psmtsv";
-            var pep_sub_1611 = SpectrumMatchTsvReader.ReadPsmTsv(pepFilePath_sub_1611, out List<string> warnings6).Where(p => p.DecoyContamTarget == "T" && p.QValue <= 0.01).ToList();
-            var pep_1611_noMod = pep_sub_1611.Where(p => !p.FullSequence.Contains("[")).ToList();
-            var calibration_1611 = new List<(double, float)>();
-            foreach (var pep in pep_1611_noMod)
+        public static List<PsmFromTsv> FilterPsmTsvFromPredictedRT(List<PsmFromTsv> psms, double rtWindow, double zScoreCutOff, out List<(int, string, double, float)> filteredPredictions)
+        {
+            var filteredPsms = new List<PsmFromTsv>();
+            var predictions = new List<(int, string, double, float)>();
+            filteredPredictions = new List<(int, string, double, float)>();
+            foreach (var psm in psms)
+            {
+                if (psm.FullSequence.Contains("|"))
+                {
+                    continue;
+                }
+                var allMods = SpectrumMatchFromTsv.ParseModifications(psm.FullSequence).Values.SelectMany(m => m).ToList();
+                if (allMods.Any(m => m.Contains("substitution")))
+                {
+                    string modifiedFullSeq = ParseSubstitutedFullSequence(psm.FullSequence);
+                    string modifiedBaseSeq = IBioPolymerWithSetMods.GetBaseSequenceFromFullSequence(modifiedFullSeq);
+                    var predictedRt = ChronologerEstimator.PredictRetentionTime(modifiedBaseSeq, modifiedFullSeq);
+                    predictions.Add((psm.Ms2ScanNumber, psm.FullSequence, psm.RetentionTime.Value, predictedRt));
+                }
+                else
+                {
+                    var predictedRt = ChronologerEstimator.PredictRetentionTime(psm.BaseSeq, psm.FullSequence);
+                    predictions.Add((psm.Ms2ScanNumber, psm.FullSequence, psm.RetentionTime.Value, predictedRt));
+                }
+            }
+            foreach (var prediction in predictions)
+            {
+                var localPredictions = predictions.Where(p => Math.Abs(p.Item3 - prediction.Item3) <= rtWindow).ToList();
+                var zScore = (prediction.Item4 - localPredictions.Select(p => p.Item4).Average())/localPredictions.Select(p => p.Item4).StandardDeviation();
+                if (Math.Abs(zScore) < zScoreCutOff)
+                {
+                    filteredPsms.Add(psms.FirstOrDefault(p => p.Ms2ScanNumber == prediction.Item1 && p.FullSequence == prediction.Item2));
+                    filteredPredictions.Add(prediction);
+                }
+            }
+            return filteredPsms;
+        }
+
+        public static GenericChart PlotPredictedRt(List<(int, string, double, float)> predictions)
+        {
+            var scatter = Chart2D.Chart.Point<double, float, string>(
+                                x: predictions.Select(p => p.Item3),
+                                y: predictions.Select(p => p.Item4)).WithMarkerStyle(Color: Color.fromString("blue"));
+            return scatter;
+        }
+
+        public static (double, double) BuildCalibrationCurveFromUnmodifiedPeptides(List<PsmFromTsv> peptides)
+        {
+            var calibration_1614 = new List<(double, float)>();
+            foreach (var pep in peptides)
             {
                 var prediction = ChronologerEstimator.PredictRetentionTime(pep.BaseSeq, pep.FullSequence);
-                calibration_1611.Add((pep.RetentionTime.Value, prediction));
+                calibration_1614.Add((pep.RetentionTime.Value, prediction));
             }
-            var (intercept2, slope2) = Fit.Line(calibration_1611.Select(p => p.Item1).ToArray(), calibration_1611.Select(p => (double)p.Item2).ToArray());
-            var filteredPep_sub_1611 = filteredPsm_sub_1611.OrderByDescending(p => p.Score).GroupBy(p => p.FullSequence).ToList();
-            var prediction_1611_sub = new List<(double, float)>();
-            foreach (var pep in filteredPep_sub_1611)
-            {
-                var newFullSeq = ParseSubstitutedFullSequence(pep.Key);
-                var newBaseSeq = IBioPolymerWithSetMods.GetBaseSequenceFromFullSequence(newFullSeq);
-                var prediction = ChronologerEstimator.PredictRetentionTime(newBaseSeq, newFullSeq);
-                prediction_1611_sub.Add((pep.First().RetentionTime.Value, prediction));
-            }
-            //var scatter1_1611 = Chart2D.Chart.Point<double, float, string>(
-            //                x: calibration_1611.Select(p => p.Item1),
-            //                y: calibration_1611.Select(p => p.Item2)).WithMarkerStyle(Color: Color.fromString("blue"));
-            //double xMin = calibration_1611.Select(p => p.Item1).Min();
-            //double xMax = calibration_1611.Select(p => p.Item1).Max();
-            //double[] xFit = new double[] { xMin, xMax };
-            //double[] yFit = xFit.Select(x => intercept2 + slope2 * x).ToArray();
-            //var regLine = Chart2D.Chart.Line<double, double, string>(
-            //        x: xFit,
-            //        y: yFit).WithLineStyle(Color: Color.fromString("red"));
-            //var scatter2_1611 = Chart2D.Chart.Point<double, float, string>(
-            //                      x: prediction_1611_sub.Select(p => p.Item1),
-            //                      y: prediction_1611_sub.Select(p => p.Item2)).WithMarkerStyle(Color: Color.fromString("green"));
-            ////var combined1611 = Chart.Combine(new[] { scatter1, regLine, scatter2_1611 });
-            ////combined1611.Show();
-            //var sd_1611_sub = calibration_1611.Select(p => p.Item2).StandardDeviation();
-            //var rtFiletered_1611_sub = prediction_1611_sub.Where(p => Math.Abs(p.Item2 - (intercept2 + slope2 * p.Item1)) <= 1 * sd_1611_sub).ToList();
-            //var scatter3_1611 = Chart2D.Chart.Point<double, float, string>(
-            //                    x: rtFiletered_1611_sub.Select(p => p.Item1),
-            //                    y: rtFiletered_1611_sub.Select(p => p.Item2)).WithMarkerStyle(Color: Color.fromString("green"));
-            //var combined1611 = Chart.Combine(new[] { scatter1, scatter3, });
-            //combined1611.Show();
+            var (intercept, slope) = Fit.Line(calibration_1614.Select(p => p.Item1).ToArray(), calibration_1614.Select(p => (double)p.Item2).ToArray());
+            return (intercept, slope);
         }
+
+        public static List<PsmFromTsv> FilterWithCalibrationCurve(List<PsmFromTsv> peptides, double slope, double intercept)
+        {
+            //var prediction_1614_sub = new List<(double, float)>();
+            //var results1614 = new List<RtPredictionResult>();
+            //foreach (var pep in peptides)
+            //{
+            //    var newFullSeq = ParseSubstitutedFullSequence(pep.FullSequence);
+            //    var newBaseSeq = IBioPolymerWithSetMods.GetBaseSequenceFromFullSequence(newFullSeq);
+            //    var prediction = ChronologerEstimator.PredictRetentionTime(newBaseSeq, newFullSeq);
+            //    prediction_1614_sub.Add((pep.RetentionTime.Value, prediction));
+            //    var result = new RtPredictionResult(pep, prediction);
+            //    if (Math.Abs(prediction - (intercept + slope * pep.RetentionTime.Value)) <= 1 * sd_1614_cali)
+            //    {
+            //        results1614.Add(result);
+            //    }
+            //}
+            return null;
+        }
+
+        public static void WriteMs2PipInputFileFromPsmTsv(List<PsmFromTsv> psmTsvList, string outPath)
+        {
+            var inputs = new List<Ms2PipInput>();
+            foreach (var psm in psmTsvList)
+            {
+                if (psm.FullSequence.Contains("|"))
+                {
+                    continue;
+                }
+                var seq = new Ms2PipInput(psm);
+                inputs.Add(seq);
+            }
+            var seqFile = new Ms2PipInputFile { Results = inputs };
+            seqFile.WriteResults(outPath);
+        }
+
+        //public static RtPredictionResultsFile GenerateRtPredictionFile (string psmWithSub, string psmWithoutSub, string peptideWithSub, string peptideWithoutSub)
+        //{
+
+        //}
 
         [Test]
         public static void TrunctatedPeptides()
@@ -1110,6 +1102,44 @@ namespace Test
             var seq2 = "IVTEDC[Common Fixed:Carbamidomethyl on C]F[1 nucleotide substitution:F->Y on F]LQIDQSAITGESLAAEK";
             //var modifiedSequence2 = ParseSubstitutedBaseSequence(seq2);
             var mod3 = ParseSubstitutedFullSequence(seq2);
+        }
+
+        [Test]
+        public static void TestWriteMs2PipInputFile()
+        {
+            var pepFilePath_sub_1614 = @"E:\Aneuploidy\DDA\062525\1614_E1-8_cali-gptmd(bioMods+1NAsub)-xml+trunc\Task3-SearchTask\Individual File Results\06-26-25_1614-R1-Q_E1+5-calib_Peptides.psmtsv";
+            var psmtsv_sub_1614 = SpectrumMatchTsvReader.ReadPsmTsv(pepFilePath_sub_1614, out List<string> warnings).Where(p => p.DecoyContamTarget == "T" && p.QValue <= 0.01).ToList();
+            var pep_noSub = psmtsv_sub_1614.Where(p =>
+                !p.FullSequence.Contains("|") &&
+                SpectrumMatchFromTsv.ParseModifications(p.FullSequence).Count == 0 ||
+                SpectrumMatchFromTsv.ParseModifications(p.FullSequence).Values.SelectMany(v => v).All(mod => mod == "Common Fixed:Carbamidomethyl on C")).ToList();//
+            var inputs = new List<Ms2PipSequence>();
+            foreach (var pep in pep_noSub)
+            {
+                var input = new Ms2PipSequence(pep);
+                inputs.Add(input);
+            }
+            string inputOutPath = @"E:\Aneuploidy\DDA\062525\RtPredictionResults\1614_filtered_sub_inputTest.peprec";
+            using (var writer = new StreamWriter(inputOutPath))
+            {
+                // Write header
+                writer.WriteLine("spec_id modifications peptide charge");
+                // Write data rows
+                foreach (var entry in inputs)
+                {
+                    writer.WriteLine($"{entry.spec_id} {entry.modifications} {entry.peptide} {entry.charge}");
+                }
+            }
+
+            string tsvInputPath = @"E:\Aneuploidy\DDA\062525\RtPredictionResults\1614_filtered_sub_inputTest.tsv";
+            var tsvInputs = new List<Ms2PipInput>();
+            foreach (var pep in pep_noSub)
+            {
+                var input = new Ms2PipInput(pep);
+                tsvInputs.Add(input);
+            }
+            var tsvInputFile = new Ms2PipInputFile { Results = tsvInputs };
+            tsvInputFile.WriteResults(tsvInputPath);
         }
 
         public class RtPredictionResult
@@ -1260,10 +1290,25 @@ namespace Test
 
             public Ms2PipInput(PsmFromTsv psmTsv)
             {
-                peptidoform = IBioPolymerWithSetMods.GetBaseSequenceFromFullSequence(ParseSubstitutedFullSequence(psmTsv.FullSequence));
-                spectrum_id = "scan" + psmTsv.Ms2ScanNumber.ToString();
+                string updatedFullSeq = psmTsv.FullSequence;
+                if (psmTsv.FullSequence.Contains("substitution"))
+                {
+                    updatedFullSeq = ParseSubstitutedFullSequence(psmTsv.FullSequence);
+                }
+                peptidoform = ParseModsForMs2PipInput(updatedFullSeq) + "/" + psmTsv.PrecursorCharge;
+                spectrum_id = "scan" + psmTsv.Ms2ScanNumber.ToString() + ": " + psmTsv.FullSequence;
             }
             public Ms2PipInput() { }
+
+            public static string ParseModsForMs2PipInput(string fullSequence)
+            {
+                // Regex matches [anything:ModificationName on X]
+                return Regex.Replace(
+                    fullSequence,
+                    @"\[[^\[\]:]*:[ ]*([A-Za-z]+)[^\[\]]*\]",
+                    m => $"[{m.Groups[1].Value}]"
+                );
+            }
         }
 
         public class Ms2PipInputFile : ResultFile<Ms2PipInput>, IResultFile
