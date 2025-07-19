@@ -948,7 +948,7 @@ namespace Test
             foreach (var prediction in predictions)
             {
                 var localPredictions = predictions.Where(p => Math.Abs(p.Item3 - prediction.Item3) <= rtWindow).ToList();
-                var zScore = (prediction.Item4 - localPredictions.Select(p => p.Item4).Average())/localPredictions.Select(p => p.Item4).StandardDeviation();
+                var zScore = (prediction.Item4 - localPredictions.Select(p => p.Item4).Average()) / localPredictions.Select(p => p.Item4).StandardDeviation();
                 if (Math.Abs(zScore) < zScoreCutOff)
                 {
                     filteredPsms.Add(psms.FirstOrDefault(p => p.Ms2ScanNumber == prediction.Item1 && p.FullSequence == prediction.Item2));
@@ -1111,25 +1111,24 @@ namespace Test
             var psmtsv_sub_1614 = SpectrumMatchTsvReader.ReadPsmTsv(pepFilePath_sub_1614, out List<string> warnings).Where(p => p.DecoyContamTarget == "T" && p.QValue <= 0.01).ToList();
             var pep_noSub = psmtsv_sub_1614.Where(p =>
                 !p.FullSequence.Contains("|") &&
-                SpectrumMatchFromTsv.ParseModifications(p.FullSequence).Count == 0 ||
-                SpectrumMatchFromTsv.ParseModifications(p.FullSequence).Values.SelectMany(v => v).All(mod => mod == "Common Fixed:Carbamidomethyl on C")).ToList();//
-            var inputs = new List<Ms2PipSequence>();
-            foreach (var pep in pep_noSub)
-            {
-                var input = new Ms2PipSequence(pep);
-                inputs.Add(input);
-            }
-            string inputOutPath = @"E:\Aneuploidy\DDA\062525\RtPredictionResults\1614_filtered_sub_inputTest.peprec";
-            using (var writer = new StreamWriter(inputOutPath))
-            {
-                // Write header
-                writer.WriteLine("spec_id modifications peptide charge");
-                // Write data rows
-                foreach (var entry in inputs)
-                {
-                    writer.WriteLine($"{entry.spec_id} {entry.modifications} {entry.peptide} {entry.charge}");
-                }
-            }
+                SpectrumMatchFromTsv.ParseModifications(p.FullSequence).Values.SelectMany(v => v).All(mod => mod == "Common Fixed:Carbamidomethyl on C" || mod == "Common Variable:Oxidation on M")).ToList();
+            //var inputs = new List<Ms2PipSequence>();
+            //foreach (var pep in pep_noSub)
+            //{
+            //    var input = new Ms2PipSequence(pep);
+            //    inputs.Add(input);
+            //}
+            //string inputOutPath = @"E:\Aneuploidy\DDA\062525\RtPredictionResults\1614_filtered_sub_inputTest.peprec";
+            //using (var writer = new StreamWriter(inputOutPath))
+            //{
+            //    // Write header
+            //    writer.WriteLine("spec_id modifications peptide charge");
+            //    // Write data rows
+            //    foreach (var entry in inputs)
+            //    {
+            //        writer.WriteLine($"{entry.spec_id} {entry.modifications} {entry.peptide} {entry.charge}");
+            //    }
+            //}
 
             string tsvInputPath = @"E:\Aneuploidy\DDA\062525\RtPredictionResults\1614_filtered_sub_inputTest.tsv";
             var tsvInputs = new List<Ms2PipInput>();
