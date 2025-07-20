@@ -5,19 +5,18 @@ using System.Text;
 using System.Threading.Tasks;
 using Python.Runtime;
 using NUnit.Framework;
-using Assert = NUnit.Framework.Legacy.ClassicAssert;
-using Readers;
-using Plotly;
-using Plotly.NET;
-using Omics.SpectrumMatch;
 using System.Diagnostics;
 using Microsoft.Win32;
 using System.Windows;
 using System.IO;
 using MzLibUtil;
-using Microsoft.VisualStudio.TestPlatform.PlatformAbstractions.Interfaces;
-using System.Windows.Documents;
-using System.Windows.Shapes;
+using CsvHelper.Configuration;
+using CsvHelper;
+using Proteomics.PSM;
+using Readers;
+using static Nett.TomlObjectFactory;
+using System.Globalization;
+using System.Text.RegularExpressions;
 
 namespace Test
 {
@@ -69,9 +68,10 @@ namespace Test
             }
         }
 
-        public static void CheckAndRunMs2Pip(string inputPsmPath, string psmFileType = null, string outputName = null, string outputFormat = "msp", bool addRetentionTime = false,bool addIonMobility = false, string model = "HCD", string modelDir = null, int? processes = null)
+        public static void CheckAndRunMs2Pip(string inputPsmPath, string pythonPath = null, string psmFileType = null, string outputName = null, string outputFormat = "msp", bool addRetentionTime = false,bool addIonMobility = false, string model = "HCD", string modelDir = null, int? processes = null)
         {
-            string pythonPath = FindPythonExe();
+            if (pythonPath == null)
+                pythonPath = FindPythonExe();
             CheckMs2PipInstalled(pythonPath);
 
             RunPredictBatchCLI(pythonPath, inputPsmPath, psmFileType, outputName, outputFormat,
@@ -147,5 +147,66 @@ namespace Test
             var outPath = @"E:\Aneuploidy\DDA\062525\RtPredictionResults\test4.msp";
             CheckAndRunMs2Pip(inputPath, outputName: outPath);
         }
+    }
+
+    public class Ms2PipInput
+    {
+        public string peptidoform { get; set; }
+        public string spectrum_id { get; set; }
+
+        public Ms2PipInput(PsmFromTsv psmTsv)
+        {
+            string updatedFullSeq = psmTsv.FullSequence;
+            if (psmTsv.FullSequence.Contains("substitution"))
+            {
+                updatedFullSeq = PsmValidations.ParseSubstitutedFullSequence(psmTsv.FullSequence);
+            }
+            peptidoform = ParseModsForMs2PipInput(updatedFullSeq) + "/" + psmTsv.PrecursorCharge;
+            spectrum_id = "scan" + psmTsv.Ms2ScanNumber.ToString() + ": " + psmTsv.FullSequence;
+        }
+        public Ms2PipInput() { }
+
+        public static string ParseModsForMs2PipInput(string fullSequence)
+        {
+            // Regex matches [anything:ModificationName on X]
+            return Regex.Replace(
+                fullSequence,
+                @"\[[^\[\]:]*:[ ]*([A-Za-z]+)[^\[\]]*\]",
+                m => $"[{m.Groups[1].Value}]"
+            );
+        }
+    }
+
+    public class Ms2PipInputFile : ResultFile<Ms2PipInput>, IResultFile
+    {
+        public static CsvConfiguration CsvConfiguration = new CsvConfiguration(CultureInfo.InvariantCulture)
+        {
+            Delimiter = "\t",
+        };
+
+        public Ms2PipInputFile() : base() { }
+        public Ms2PipInputFile(string filePath) : base(filePath, Software.Unspecified) { }
+
+        public override void LoadResults()
+        {
+            using var csv = new CsvReader(new StreamReader(FilePath), CsvConfiguration);
+            Results = csv.GetRecords<Ms2PipInput>().ToList();
+        }
+
+        public string FullFileName { get; set; }
+        public override void WriteResults(string outputPath)
+        {
+            using var csv = new CsvWriter(new StreamWriter(File.Create(outputPath)), CsvConfiguration);
+
+            csv.WriteHeader<Ms2PipInput>();
+            foreach (var result in Results)
+            {
+                csv.NextRecord();
+                csv.WriteRecord(result);
+            }
+        }
+
+        public override SupportedFileType FileType { get; }
+        public override Software Software { get; set; }
     }
 }

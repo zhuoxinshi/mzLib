@@ -824,7 +824,7 @@ namespace Test
                 }
                 if (peptide.FullSequence.Contains("substitution"))
                 {
-                    var newFullSeq = ParseSubstitutedFullSequence(peptide.FullSequence);
+                    var newFullSeq = PsmValidations.ParseSubstitutedFullSequence(peptide.FullSequence);
                     var newBaseSeq = IBioPolymerWithSetMods.GetBaseSequenceFromFullSequence(newFullSeq);
                     var prediction = ChronologerEstimator.PredictRetentionTime(newBaseSeq, newFullSeq);
                     pair_sub.Add((peptide.RetentionTime.Value, prediction));
@@ -854,16 +854,14 @@ namespace Test
             var psmtsv_noSub_1614 = SpectrumMatchTsvReader.ReadPsmTsv(psmFilePath_noSub_1614, out List<string> warnings2).Where(p => p.DecoyContamTarget == "T" && p.QValue <= 0.01).ToList();
 
             //filter out PSMs where the predicted RT is considered as an outlier
-            var rtFilteredPsms_1614 = FilterPsmTsvFromPredictedRT(psmtsv_sub_1614, 1, 1.96, out List<(int, string, double, float)> filteredPredictions);
+            var rtFilteredPsms_1614 = PsmValidations.FilterPsmTsvFromPredictedRT(psmtsv_sub_1614, 1, 1.96, out List<(int, string, double, float)> filteredPredictions);
             //PlotPredictedRt(filteredPredictions).Show();
 
             //filter out PSMs that can be explained by other PTMs
-            var filteredPsm_sub_1614 = FilterUniquePsmTsv(rtFilteredPsms_1614, psmtsv_noSub_1614);
+            var filteredPsm_sub_1614 = PsmValidations.FilterUniquePsmTsv(rtFilteredPsms_1614, psmtsv_noSub_1614);
 
             //write Ms2Pip input file for spectra prediction
             var spectraOutPath = @"E:\Aneuploidy\DDA\062525\RtPredictionResults\filteredSpectra.mzML";
-
-
 
             //write out peptide sequences to predict peptide fragmentation
             //var sequences = new List<Ms2PipSequence>();
@@ -899,82 +897,6 @@ namespace Test
             //combined.Show();
         }
 
-        public static List<PsmFromTsv> FilterUniquePsmTsv(List<PsmFromTsv> psmsWithSub, List<PsmFromTsv> psmsWithoutSub)
-        {
-            var filteredPsms = new List<PsmFromTsv>();
-            foreach (var psm in psmsWithSub)
-            {
-                if (psm.FullSequence.Contains("|"))
-                {
-                    continue;
-                }
-                if (psmsWithoutSub.Any(p => p.Ms2ScanNumber == psm.Ms2ScanNumber && p.PrecursorCharge == psm.PrecursorCharge && Math.Round(p.PrecursorMass, 2) == Math.Round(psm.PrecursorMass, 2)))
-                {
-                    continue;
-                }
-                filteredPsms.Add(psm);
-            }
-            return filteredPsms;
-        }
-
-        public static List<PsmFromTsv> FilterPsmTsvFromPredictedRT(List<PsmFromTsv> psms, double rtWindow, double zScoreCutOff, out List<(int, string, double, float)> filteredPredictions)
-        {
-            var filteredPsms = new List<PsmFromTsv>();
-            var predictions = new List<(int, string, double, float)>();
-            filteredPredictions = new List<(int, string, double, float)>();
-            foreach (var psm in psms)
-            {
-                if (psm.FullSequence.Contains("|"))
-                {
-                    continue;
-                }
-                var allMods = SpectrumMatchFromTsv.ParseModifications(psm.FullSequence).Values.SelectMany(m => m).ToList();
-                if (allMods.Any(m => m.Contains("substitution")))
-                {
-                    string modifiedFullSeq = ParseSubstitutedFullSequence(psm.FullSequence);
-                    string modifiedBaseSeq = IBioPolymerWithSetMods.GetBaseSequenceFromFullSequence(modifiedFullSeq);
-                    var predictedRt = ChronologerEstimator.PredictRetentionTime(modifiedBaseSeq, modifiedFullSeq);
-                    predictions.Add((psm.Ms2ScanNumber, psm.FullSequence, psm.RetentionTime.Value, predictedRt));
-                }
-                else
-                {
-                    var predictedRt = ChronologerEstimator.PredictRetentionTime(psm.BaseSeq, psm.FullSequence);
-                    predictions.Add((psm.Ms2ScanNumber, psm.FullSequence, psm.RetentionTime.Value, predictedRt));
-                }
-            }
-            foreach (var prediction in predictions)
-            {
-                var localPredictions = predictions.Where(p => Math.Abs(p.Item3 - prediction.Item3) <= rtWindow).ToList();
-                var zScore = (prediction.Item4 - localPredictions.Select(p => p.Item4).Average()) / localPredictions.Select(p => p.Item4).StandardDeviation();
-                if (Math.Abs(zScore) < zScoreCutOff)
-                {
-                    filteredPsms.Add(psms.FirstOrDefault(p => p.Ms2ScanNumber == prediction.Item1 && p.FullSequence == prediction.Item2));
-                    filteredPredictions.Add(prediction);
-                }
-            }
-            return filteredPsms;
-        }
-
-        public static GenericChart PlotPredictedRt(List<(int, string, double, float)> predictions)
-        {
-            var scatter = Chart2D.Chart.Point<double, float, string>(
-                                x: predictions.Select(p => p.Item3),
-                                y: predictions.Select(p => p.Item4)).WithMarkerStyle(Color: Color.fromString("blue"));
-            return scatter;
-        }
-
-        public static (double, double) BuildCalibrationCurveFromUnmodifiedPeptides(List<PsmFromTsv> peptides)
-        {
-            var calibration_1614 = new List<(double, float)>();
-            foreach (var pep in peptides)
-            {
-                var prediction = ChronologerEstimator.PredictRetentionTime(pep.BaseSeq, pep.FullSequence);
-                calibration_1614.Add((pep.RetentionTime.Value, prediction));
-            }
-            var (intercept, slope) = Fit.Line(calibration_1614.Select(p => p.Item1).ToArray(), calibration_1614.Select(p => (double)p.Item2).ToArray());
-            return (intercept, slope);
-        }
-
         public static List<PsmFromTsv> FilterWithCalibrationCurve(List<PsmFromTsv> peptides, double slope, double intercept)
         {
             //var prediction_1614_sub = new List<(double, float)>();
@@ -992,47 +914,6 @@ namespace Test
             //    }
             //}
             return null;
-        }
-
-        public static void WriteMs2PipInputFileFromPsmTsv(List<PsmFromTsv> psmTsvList, string outPath)
-        {
-            var inputs = new List<Ms2PipInput>();
-            foreach (var psm in psmTsvList)
-            {
-                if (psm.FullSequence.Contains("|"))
-                {
-                    continue;
-                }
-                var seq = new Ms2PipInput(psm);
-                inputs.Add(seq);
-            }
-            var seqFile = new Ms2PipInputFile { Results = inputs };
-            seqFile.WriteResults(outPath);
-        }
-
-        //public static RtPredictionResultsFile GenerateRtPredictionFile (string psmWithSub, string psmWithoutSub, string peptideWithSub, string peptideWithoutSub)
-        //{
-
-        //}
-
-        [Test]
-        public static void TrunctatedPeptides()
-        {
-            var pepFilePath_sub_1614 = @"E:\Aneuploidy\DDA\062525\1614_E1-8_cali-gptmd(bioMods+1NAsub)-xml+trunc\Task3-SearchTask\Individual File Results\06-26-25_1614-R1-Q_E1+5-calib_Peptides.psmtsv";
-            var pep_sub_1614 = SpectrumMatchTsvReader.ReadPsmTsv(pepFilePath_sub_1614, out List<string> warnings).Where(p => p.DecoyContamTarget == "T" && p.QValue <= 0.01).ToList();
-            var psmFilePath_noSub_1614_pep = @"E:\Aneuploidy\DDA\062525\1614_E1-8_calied-gptmd(bioMods)-xml+trunc\Task2-SearchTask\Individual File Results\06-26-25_1614-R1-Q_E1+5-calib_Peptides.psmtsv";
-            var pep_noSub_1614 = SpectrumMatchTsvReader.ReadPsmTsv(psmFilePath_noSub_1614_pep, out List<string> warnings2).Where(p => p.DecoyContamTarget == "T" && p.QValue <= 0.01).ToList();
-
-            var pepFilePath_sub_1611 = @"E:\Aneuploidy\DDA\062525\1611_E1-8_cali-gptmd(bioMods+1NAsub)-xml+trunc\Task3-SearchTask\Individual File Results\06-25-25_1611-R1-Q_E1+5-calib_Peptides.psmtsv";
-            var pep_sub_1611 = SpectrumMatchTsvReader.ReadPsmTsv(pepFilePath_sub_1611, out List<string> warnings3).Where(p => p.DecoyContamTarget == "T" && p.QValue <= 0.01).ToList();
-            var psmFilePath_noSub_1611_pep = @"E:\Aneuploidy\DDA\062525\1611_E1-8_calied-gptmd(bioMods)-xml+trunc\Task2-SearchTask\Individual File Results\06-25-25_1611-R1-Q_E1+5-calib_Peptides.psmtsv";
-            var pep_noSub_1611 = SpectrumMatchTsvReader.ReadPsmTsv(psmFilePath_noSub_1611_pep, out List<string> warnings4).Where(p => p.DecoyContamTarget == "T" && p.QValue <= 0.01).ToList();
-
-            var pep_sub_1614_trunc = pep_sub_1614.Where(p => p.BaseSeq.Last() != 'K' && p.BaseSeq.Last() != 'R').ToList();
-            var pep_noSub_1614_trunc = pep_noSub_1614.Where(p => p.BaseSeq.Last() != 'K' && p.BaseSeq.Last() != 'R').ToList();
-            var pep_sub_1611_trunc = pep_sub_1611.Where(p => p.BaseSeq.Last() != 'K' && p.BaseSeq.Last() != 'R').ToList();
-            var pep_noSub_1611_trunc = pep_noSub_1611.Where(p => p.BaseSeq.Last() != 'K' && p.BaseSeq.Last() != 'R').ToList();
-            //psm.BaseSeq.Last() != 'K' && psm.BaseSeq.Last() != 'R'
         }
 
         [Test]
@@ -1056,50 +937,6 @@ namespace Test
             scatter1.Show();
         }
 
-        public static string ParseSubstitutedFullSequence(string fullSequence)
-        {
-            var subMatch = Regex.Match(fullSequence, @"\[(\d+)[^\:]*:([A-Z])->([A-Z])");
-            if (!subMatch.Success)
-                return fullSequence; // No substitution found
-
-            int position = int.Parse(subMatch.Groups[1].Value) - 1; // 0-based
-            char newAminoAcid = subMatch.Groups[3].Value[0];
-
-            // Remove only the substitution annotation
-            string cleaned = Regex.Replace(fullSequence, @"\[\d+[^\]]*substitution:[A-Z]->[A-Z][^\]]*\]", "");
-
-            // Find the index after the last closing bracket (end of all annotations)
-            int seqStart = cleaned.LastIndexOf(']') + 1;
-            if (seqStart < 0 || seqStart >= cleaned.Length)
-                return cleaned; // No sequence found
-
-            // The sequence is everything after the last bracket
-            string prefix = cleaned.Substring(0, seqStart);
-            string sequence = cleaned.Substring(seqStart);
-
-            // Only substitute if the sequence is long enough
-            if (sequence.Length > position)
-            {
-                char[] seqArray = sequence.ToCharArray();
-                seqArray[position] = newAminoAcid;
-                string modifiedSequence = new string(seqArray);
-                return prefix + modifiedSequence;
-            }
-
-            // If not long enough, return cleaned string
-            return cleaned;
-        }
-
-        [Test]
-        public static void TestParsing()
-        {
-            //var seq = "S[1 nucleotide substitution:S->C on S]QEELDEMGAPIDYLTPIVADADAGHGGLTAVFK";
-            //var modifiedSequence = ParseSubstitutedBaseSequence(seq);
-            //var mod4 = ParseSubstitutedFullSequence(seq);
-            var seq2 = "IVTEDC[Common Fixed:Carbamidomethyl on C]F[1 nucleotide substitution:F->Y on F]LQIDQSAITGESLAAEK";
-            //var modifiedSequence2 = ParseSubstitutedBaseSequence(seq2);
-            var mod3 = ParseSubstitutedFullSequence(seq2);
-        }
 
         [Test]
         public static void TestWriteMs2PipInputFile()
@@ -1138,72 +975,7 @@ namespace Test
             tsvInputFile.WriteResults(tsvInputPath);
         }
 
-        public class RtPredictionResult
-        {
-            public int Ms2ScanNumber { get; set; }
-            public double PrecursorMass { get; set; }
-            public int PrecursorCharge { get; set; }
-            public double RetentionTime { get; set; }
-            public double PredictedRetentionTime { get; set; }
-            public string BaseSequence { get; set; }
-            public string FullSequence { get; set; }
-            public string ModifiedBaseSequence { get; set; }
-            public string ModifiedFullSequence { get; set; }
-            public string ProteinAccession { get; set; }
-            public double PsmScore { get; set; }
-            public string Modifications { get; set; }
-
-            public RtPredictionResult(PsmFromTsv psmTsv, double predictedRT)
-            {
-                Ms2ScanNumber = psmTsv.Ms2ScanNumber;
-                PrecursorMass = psmTsv.PrecursorMass;
-                PrecursorCharge = psmTsv.PrecursorCharge;
-                RetentionTime = psmTsv.RetentionTime ?? 0.0;
-                PredictedRetentionTime = predictedRT;
-                BaseSequence = psmTsv.BaseSeq;
-                FullSequence = psmTsv.FullSequence;
-                ModifiedFullSequence = ParseSubstitutedFullSequence(FullSequence);
-                ModifiedBaseSequence = IBioPolymerWithSetMods.GetBaseSequenceFromFullSequence(ModifiedFullSequence);
-                PsmScore = psmTsv.Score;
-                ProteinAccession = psmTsv.ProteinAccession;
-                var allMods = SpectrumMatchFromTsv.ParseModifications(psmTsv.FullSequence).Values.SelectMany(p => p);
-                Modifications = string.Join(", ", allMods);
-            }
-            public RtPredictionResult() { }
-        }
-
-        public class RtPredictionResultsFile : ResultFile<RtPredictionResult>, IResultFile
-        {
-            public static CsvConfiguration CsvConfiguration = new CsvConfiguration(CultureInfo.InvariantCulture)
-            {
-                Delimiter = "\t",
-            };
-
-            public RtPredictionResultsFile() : base() { }
-            public RtPredictionResultsFile(string filePath) : base(filePath, Software.Unspecified) { }
-
-            public override void LoadResults()
-            {
-                using var csv = new CsvReader(new StreamReader(FilePath), CsvConfiguration);
-                Results = csv.GetRecords<RtPredictionResult>().ToList();
-            }
-
-            public string FullFileName { get; set; }
-            public override void WriteResults(string outputPath)
-            {
-                using var csv = new CsvWriter(new StreamWriter(File.Create(outputPath)), CsvConfiguration);
-
-                csv.WriteHeader<RtPredictionResult>();
-                foreach (var result in Results)
-                {
-                    csv.NextRecord();
-                    csv.WriteRecord(result);
-                }
-            }
-
-            public override SupportedFileType FileType { get; }
-            public override Software Software { get; set; }
-        }
+        
 
         public class Ms2PipSequence
         {
@@ -1224,7 +996,7 @@ namespace Test
             {
                 spec_id = "scan" + psmTsv.Ms2ScanNumber.ToString();
                 this.modifications = modifications;
-                peptide = ParseSubstitutedFullSequence(psmTsv.FullSequence);
+                peptide = PsmValidations.ParseSubstitutedFullSequence(psmTsv.FullSequence);
                 charge = psmTsv.PrecursorCharge;
             }
             public Ms2PipSequence() { }
@@ -1279,65 +1051,5 @@ namespace Test
             public override Software Software { get; set; }
         }
 
-        public class Ms2PipInput
-        {
-            public string peptidoform { get; set; }
-            public string spectrum_id { get; set; }
-
-            public Ms2PipInput(PsmFromTsv psmTsv)
-            {
-                string updatedFullSeq = psmTsv.FullSequence;
-                if (psmTsv.FullSequence.Contains("substitution"))
-                {
-                    updatedFullSeq = ParseSubstitutedFullSequence(psmTsv.FullSequence);
-                }
-                peptidoform = ParseModsForMs2PipInput(updatedFullSeq) + "/" + psmTsv.PrecursorCharge;
-                spectrum_id = "scan" + psmTsv.Ms2ScanNumber.ToString() + ": " + psmTsv.FullSequence;
-            }
-            public Ms2PipInput() { }
-
-            public static string ParseModsForMs2PipInput(string fullSequence)
-            {
-                // Regex matches [anything:ModificationName on X]
-                return Regex.Replace(
-                    fullSequence,
-                    @"\[[^\[\]:]*:[ ]*([A-Za-z]+)[^\[\]]*\]",
-                    m => $"[{m.Groups[1].Value}]"
-                );
-            }
-        }
-
-        public class Ms2PipInputFile : ResultFile<Ms2PipInput>, IResultFile
-        {
-            public static CsvConfiguration CsvConfiguration = new CsvConfiguration(CultureInfo.InvariantCulture)
-            {
-                Delimiter = "\t",
-            };
-
-            public Ms2PipInputFile() : base() { }
-            public Ms2PipInputFile(string filePath) : base(filePath, Software.Unspecified) { }
-
-            public override void LoadResults()
-            {
-                using var csv = new CsvReader(new StreamReader(FilePath), CsvConfiguration);
-                Results = csv.GetRecords<Ms2PipInput>().ToList();
-            }
-
-            public string FullFileName { get; set; }
-            public override void WriteResults(string outputPath)
-            {
-                using var csv = new CsvWriter(new StreamWriter(File.Create(outputPath)), CsvConfiguration);
-
-                csv.WriteHeader<Ms2PipInput>();
-                foreach (var result in Results)
-                {
-                    csv.NextRecord();
-                    csv.WriteRecord(result);
-                }
-            }
-
-            public override SupportedFileType FileType { get; }
-            public override Software Software { get; set; }
-        }
     }
 }
