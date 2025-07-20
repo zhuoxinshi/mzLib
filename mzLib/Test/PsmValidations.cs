@@ -45,19 +45,19 @@ namespace Test
             var psmtsvWithSub_1614 = psmtsv_sub_1614.Where(p => p.FullSequence.Contains("substitution")).ToList();
 
             //filter out PSMs where the predicted RT is considered as an outlier
-            var rtFilteredPsms_1614 = FilterPsmTsvFromPredictedRT(psmtsvWithSub_1614, 1, 1.96, out List<(int, string, double, float)> filteredPredictions);
+            var rtFilteredPsms_1614 = FilterPsmTsvFromPredictedRT(psmtsvWithSub_1614, 1, 1.68, out List<(int, string, double, float)> filteredPredictions);
             //PlotPredictedRt(filteredPredictions).Show();
 
             //filter out PSMs that can be explained by other PTMs
             var filteredPsm_sub_1614 = FilterUniquePsmTsv(rtFilteredPsms_1614, psmtsv_noSub_1614);
-            var filteredPsmOutPath = @"E:\Aneuploidy\DDA\071525\RtPredictionResults\filteredPSMs_1614.tsv";
-            var filteredPsmTsvFile = new PsmFromTsvFile { Results = filteredPsm_sub_1614 };
-            filteredPsmTsvFile.WriteResults(filteredPsmOutPath);
+            var filteredPep_sub_1614 = filteredPsm_sub_1614.GroupBy(p => p.FullSequence).Select(g => g.First()).ToList();
+            var pepToWrite = filteredPep_sub_1614.Where(p => SpectrumMatchFromTsv.ParseModifications(ParseSubstitutedFullSequence(p.FullSequence)).Values.SelectMany(v => v).All(mod => mod == "Common Fixed:Carbamidomethyl on C" || mod == "Common Variable:Oxidation on M")).ToList();
 
             //write Ms2Pip input file for spectral prediction
-            var libraryOutPath = @"E:\Aneuploidy\DDA\062525\RtPredictionResults\filteredSpectra.mzML";
-            var inputFilePath = @"E:\Aneuploidy\DDA\062525\RtPredictionResults\filteredPSMs.tsv";
-            WriteMs2PipInputFileFromPsmTsv(filteredPsm_sub_1614, inputFilePath);
+            var libraryOutPath = @"E:\Aneuploidy\DDA\062525\RtPredictionResults\filteredPeptides_1614.msp";
+            var inputFilePath = @"E:\Aneuploidy\DDA\062525\RtPredictionResults\filteredPSMs_1614.tsv";
+            WriteMs2PipInputFileFromPsmTsv(pepToWrite, inputFilePath);
+            Ms2PipPrediction.CheckAndRunMs2Pip(inputFilePath, null, null, libraryOutPath, "msp", false, false, "HCDch2", null);
         }
 
         [Test]
