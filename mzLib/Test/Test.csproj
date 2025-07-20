@@ -18,6 +18,9 @@
     <PackageReference Include="NUnit3TestAdapter" Version="4.5.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.10.0" />
     <PackageReference Include="Plotly.NET.CSharp" Version="0.13.0" />
+    <PackageReference Include="python" Version="3.13.5" />
+    <PackageReference Include="Python.Runtime" Version="2.7.9" />
+    <PackageReference Include="pythonnet" Version="3.0.5" />
     <PackageReference Include="SharpLearning.Optimization" Version="0.28.0" />
     <PackageReference Include="TopDownProteomics" Version="0.0.297" />
   </ItemGroup>
