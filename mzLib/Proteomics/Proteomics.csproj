@@ -22,6 +22,9 @@
     <None Update="ProteolyticDigestion\proteases.tsv">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
+    <None Update="RetentionTimePrediction\ChronologerModel\Chronologer_20220601193755_TorchSharp.dat">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
   <ItemGroup>
@@ -31,6 +34,7 @@
   <ItemGroup>
     <PackageReference Include="CsvHelper" Version="32.0.3" />
     <PackageReference Include="TorchSharp" Version="0.105.1" />
+    <PackageReference Include="TorchSharp-cuda-windows" Version="0.105.1" />
   </ItemGroup>
 
 </Project>

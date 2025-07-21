@@ -41,13 +41,21 @@ namespace Test
             var filteredPsm_sub_1614 = FilterUniquePsmTsv(rtFilteredPsms_1614, psmtsv_noSub_1614);
             var filteredPep_sub_1614 = filteredPsm_sub_1614.GroupBy(p => p.FullSequence).Select(g => g.First()).ToList();
             var pepToWrite = filteredPep_sub_1614.Where(p => SpectrumMatchFromTsv.ParseModifications(ParseSubstitutedFullSequence(p.FullSequence)).Values.SelectMany(v => v).All(mod => mod == "Common Fixed:Carbamidomethyl on C" || mod == "Common Variable:Oxidation on M")).ToList();
-            var pep_noMod = filteredPep_sub_1614.Where(p => SpectrumMatchFromTsv.ParseModifications(p.FullSequence).Values.SelectMany(v => v).All(mod => mod == "Common Fixed:Carbamidomethyl on C")).ToList();
+            var pep_noMod = psmtsv_sub_1614.Where(p => SpectrumMatchFromTsv.ParseModifications(p.FullSequence).Values.SelectMany(v => v).All(mod => mod == "Common Fixed:Carbamidomethyl on C")).GroupBy(p => p.FullSequence).Select(g => g.First()).ToList();
 
             //write Ms2Pip input file for spectral prediction
-            var libraryOutPath = @"E:\Aneuploidy\DDA\062525\RtPredictionResults\1614_noMod.msp";
+            var libraryOutPath = @"E:\Aneuploidy\DDA\062525\RtPredictionResults\1614_noMod_HCD2021.msp";
             var inputFilePath = @"E:\Aneuploidy\DDA\062525\RtPredictionResults\1614_noMod_ms2PipInput.tsv";
             WriteMs2PipInputFileFromPsmTsv(pep_noMod, inputFilePath);
-            Ms2PIP.CheckAndRunMs2Pip(inputFilePath, null, null, libraryOutPath, "msp", false, false, "HCDch2", null);
+            Ms2PIP.CheckAndRunMs2Pip(inputFilePath, null, null, libraryOutPath, "msp", false, false, "HCD2021", null);
+        }
+
+        [Test]
+        public static void PredictSpectra()
+        {
+            var libraryOutPath = @"E:\Aneuploidy\DDA\062525\RtPredictionResults\1614_noMod_HCD_predictions.msp";
+            var inputFilePath = @"E:\Aneuploidy\DDA\062525\RtPredictionResults\1614_noMod_ms2PipInput.tsv";
+            Ms2PIP.CheckAndRunMs2Pip(inputFilePath, null, null, libraryOutPath, "msp", false, false, "HCD", null);
         }
 
         [Test]
