@@ -42,12 +42,14 @@ namespace Test
             var filteredPep_sub_1614 = filteredPsm_sub_1614.GroupBy(p => p.FullSequence).Select(g => g.First()).ToList();
             var pepToWrite = filteredPep_sub_1614.Where(p => SpectrumMatchFromTsv.ParseModifications(ParseSubstitutedFullSequence(p.FullSequence)).Values.SelectMany(v => v).All(mod => mod == "Common Fixed:Carbamidomethyl on C" || mod == "Common Variable:Oxidation on M")).ToList();
             var pep_noMod = psmtsv_sub_1614.Where(p => SpectrumMatchFromTsv.ParseModifications(p.FullSequence).Values.SelectMany(v => v).All(mod => mod == "Common Fixed:Carbamidomethyl on C")).GroupBy(p => p.FullSequence).Select(g => g.First()).ToList();
+            var decoys = SpectrumMatchTsvReader.ReadPsmTsv(psmFilePath_noSub_1614, out List<string> warnings3).Where(p => p.DecoyContamTarget == "D")
+                .Where(p => SpectrumMatchFromTsv.ParseModifications(p.FullSequence).Values.SelectMany(v => v).All(mod => mod == "Common Fixed:Carbamidomethyl on C")).GroupBy(p => p.FullSequence).Select(g => g.First()).ToList();
 
             //write Ms2Pip input file for spectral prediction
-            var libraryOutPath = @"E:\Aneuploidy\DDA\062525\RtPredictionResults\1614_noMod_HCD2021.msp";
-            var inputFilePath = @"E:\Aneuploidy\DDA\062525\RtPredictionResults\1614_noMod_ms2PipInput.tsv";
-            WriteMs2PipInputFileFromPsmTsv(pep_noMod, inputFilePath);
-            Ms2PIP.CheckAndRunMs2Pip(inputFilePath, null, null, libraryOutPath, "msp", false, false, "HCD2021", null);
+            var libraryOutPath = @"E:\Aneuploidy\DDA\062525\RtPredictionResults\1614_HCDch2_decoys_predictions.msp";
+            var inputFilePath = @"E:\Aneuploidy\DDA\062525\RtPredictionResults\1614_decoy_ms2PipInput.tsv";
+            WriteMs2PipInputFileFromPsmTsv(decoys, inputFilePath);
+            Ms2PIP.CheckAndRunMs2Pip(inputFilePath, null, null, libraryOutPath, "msp", false, false, "HCDch2", null);
         }
 
         [Test]
