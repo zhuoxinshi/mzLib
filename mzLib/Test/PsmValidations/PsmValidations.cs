@@ -17,6 +17,8 @@ using Readers;
 using Proteomics;
 using Plotly;
 using Plotly.NET;
+using Readers.SpectralLibrary;
+using MassSpectrometry;
 
 namespace Test
 {
@@ -50,6 +52,15 @@ namespace Test
             var inputFilePath = @"E:\Aneuploidy\DDA\062525\RtPredictionResults\1614_decoy_ms2PipInput.tsv";
             WriteMs2PipInputFileFromPsmTsv(decoys, inputFilePath);
             Ms2PIP.CheckAndRunMs2Pip(inputFilePath, null, null, libraryOutPath, "msp", false, false, "HCDch2", null);
+
+            //Calculate spectal similarity
+            var pathList = new List<string> { libraryOutPath };
+            var library = new SpectralLibrary(pathList);
+            var librarySpectra = library.GetAllLibrarySpectra().ToList();
+            var rawPath = @"E:\Aneuploidy\DDA\071525\07-15-25_1614-R1-Q_E1+5-calib.mzML";
+            var rawFile = MsDataFileReader.GetDataFile(rawPath);
+            var ms2Scans = rawFile.GetAllScansList().Where(s => s.MsnOrder == 2).ToArray();
+
         }
 
         [Test]
