@@ -3,8 +3,10 @@ using FlashLFQ;
 using MassSpectrometry;
 using MzLibUtil;
 using NUnit.Framework;
+using Readers;
 using System.Collections.Generic;
 using System.Linq;
+using Test.FileReadingTests;
 using Assert = NUnit.Framework.Legacy.ClassicAssert;
 
 namespace Test
@@ -128,6 +130,19 @@ namespace Test
             var intensityArray2 = new float[] { 100, 200, 300, 400, 500 };
             var ex2 = Assert.Throws<MzLibException>(() => cubicSpline.GetXicSplineData(rtArray, intensityArray2, 1.0, 1.2));
             Assert.That(ex2.Message, Is.EqualTo("Input arrays must have the same length."));
+        }
+
+        [Test]
+        public static void Random()
+        {
+            var path = @"E:\DIA\DIA-Umpire data\18300_REP2_500ng_HumanLysate_SWATH_1.mzML";
+            var msData = MsDataFileReader.GetDataFile(path);
+            var scans = msData.GetAllScansList().ToList();
+            var example = scans.First();
+            var subset = scans.Where(s => s.NativeId.Contains("cycle=427") || s.NativeId.Contains("cycle=428") || s.NativeId.Contains("cycle=429")).ToArray();
+            FakeMsDataFile snip = new FakeMsDataFile(subset);
+            var writePath = @"E:\DIA\DIA-Umpire data\18300_REP2_500ng_HumanLysate_SWATH_1_snip.mzML";
+            snip.ExportAsMzML(writePath, true);
         }
     }
 }
