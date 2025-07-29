@@ -2,11 +2,13 @@
 using MathNet.Numerics.Interpolation;
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Drawing;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace MassSpectrometry
 {
@@ -48,6 +50,20 @@ namespace MassSpectrometry
         {
             double sumIntensity = Peaks.Sum(p => p.Intensity);
             NormalizedPeakIntensities = Peaks.Select(p => p.Intensity / sumIntensity * 100).ToArray();
+        }
+
+        public double GetAreaUnderXic()
+        {
+            double area = 0;
+            for (int i = 1; i < Peaks.Count; i++)
+            {
+                double x1 = Peaks[i - 1].RetentionTime;
+                double x2 = Peaks[i].RetentionTime;
+                double y1 = Peaks[i - 1].Intensity;
+                double y2 = Peaks[i].Intensity;
+                area += (x2 - x1) * (y1 + y2) / 2;
+            }
+            return area;
         }
 
         /// <summary>

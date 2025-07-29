@@ -258,5 +258,27 @@ namespace Test
             var ex = Assert.Throws<MzLibException>(() => peakIndexEngine.GetXic(Dist.Masses.First().ToMz(1), zeroBasedStartIndex: 4, new PpmTolerance(20), 1, 10, 1));
             Assert.That(ex.Message, Is.EqualTo("Error: Attempted to access a peak using a charge parameter, but the peaks do not have charge information available."));
         }
+
+        [Test]
+        public static void TestAreaUnderXic()
+        {
+            var peakList1 = new List<IIndexedPeak>();
+            double[] intensityMultipliers1 = { 1, 3, 1 };
+            for (int i = 0; i < intensityMultipliers1.Length; i++)
+            {
+                peakList1.Add(new IndexedMassSpectralPeak(intensity: 1e5 * intensityMultipliers1[i], retentionTime: 1f + i / 10f, zeroBasedScanIndex: i + 5, mz: 500.0));
+            }
+            var xic1 = new ExtractedIonChromatogram(peakList1);
+            Assert.That(xic1.GetAreaUnderXic(), Is.EqualTo(1e5 * 0.4).Within(0.01));
+
+            var peakList2 = new List<IIndexedPeak>();
+            double[] intensityMultipliers2 = { 1, 2, 3, 2, 1 };
+            for (int i = 0; i < intensityMultipliers2.Length; i++)
+            {
+                peakList2.Add(new IndexedMassSpectralPeak(intensity: 1e5 * intensityMultipliers2[i], retentionTime: 1f + i / 20f, zeroBasedScanIndex: i + 5, mz: 500.0));
+            }
+            var xic2 = new ExtractedIonChromatogram(peakList2);
+            Assert.That(xic2.GetAreaUnderXic(), Is.EqualTo(1e5 * 0.4).Within(0.01));
+        }
     }
 }
