@@ -19,6 +19,7 @@ using Plotly;
 using Plotly.NET;
 using Readers.SpectralLibrary;
 using MassSpectrometry;
+using Chemistry;
 
 namespace Test
 {
@@ -60,16 +61,8 @@ namespace Test
             var rawPath = @"E:\Aneuploidy\DDA\071525\07-15-25_1614-R1-Q_E1+5-calib.mzML";
             var rawFile = MsDataFileReader.GetDataFile(rawPath);
             var ms2Scans = rawFile.GetAllScansList().Where(s => s.MsnOrder == 2).ToArray();
-
         }
 
-        [Test]
-        public static void PredictSpectra()
-        {
-            var libraryOutPath = @"E:\Aneuploidy\DDA\062525\RtPredictionResults\1614_noMod_HCD_predictions.msp";
-            var inputFilePath = @"E:\Aneuploidy\DDA\062525\RtPredictionResults\1614_noMod_ms2PipInput.tsv";
-            Ms2PIP.CheckAndRunMs2Pip(inputFilePath, null, null, libraryOutPath, "msp", false, false, "HCD", null);
-        }
 
         [Test]
         public static void TrunctatedPeptides()
@@ -125,16 +118,6 @@ namespace Test
             return cleaned;
         }
 
-        [Test]
-        public static void TestParsing()
-        {
-            //var seq = "S[1 nucleotide substitution:S->C on S]QEELDEMGAPIDYLTPIVADADAGHGGLTAVFK";
-            //var modifiedSequence = ParseSubstitutedBaseSequence(seq);
-            //var mod4 = ParseSubstitutedFullSequence(seq);
-            var seq2 = "IVTEDC[Common Fixed:Carbamidomethyl on C]F[1 nucleotide substitution:F->Y on F]LQIDQSAITGESLAAEK";
-            //var modifiedSequence2 = ParseSubstitutedBaseSequence(seq2);
-            var mod3 = PsmValidations.ParseSubstitutedFullSequence(seq2);
-        }
 
         public static List<PsmFromTsv> FilterUniquePsmTsv(List<PsmFromTsv> psmsWithSub, List<PsmFromTsv> psmsWithoutSub)
         {
@@ -192,6 +175,24 @@ namespace Test
             return filteredPsms;
         }
 
+        public static void WriteOutScansForDenovo(List<PsmFromTsv> psmTsvs, string rawFilePath, string outPath)
+        {
+            var rawFile = MsDataFileReader.GetDataFile(rawFilePath);
+            var sourceFile = rawFile.GetSourceFile();
+            var ms2Scans = rawFile.GetAllScansList().Where(s => s.MsnOrder == 2).ToList();
+            var filteredScans = new List<MsDataScan>();
+            int oneBasedNumber = 1;
+            foreach(var psmTsv in psmTsvs)
+            {
+                var rawScan = ms2Scans.Where(s => s.OneBasedScanNumber == psmTsv.Ms2ScanNumber).FirstOrDefault();
+                var newScan = new MsDataScan(rawScan.MassSpectrum, oneBasedNumber, 2, true, Polarity.Positive, rawScan.RetentionTime, rawScan.ScanWindowRange, rawScan.ScanFilter, rawScan.MzAnalyzer, rawScan.TotalIonCurrent, rawScan.InjectionTime, rawScan.NoiseData, "scan: " + psmTsv.Ms2ScanNumber + " "+ psmTsv.FullSequence, psmTsv.PrecursorMz, psmTsv.PrecursorCharge, psmTsv.PrecursorIntensity.Value, psmTsv.PrecursorMz, rawScan.IsolationWidth, rawScan.DissociationType, null, psmTsv.PrecursorMass.ToMz(psmTsv.PrecursorCharge));
+                filteredScans.Add(newScan);
+                oneBasedNumber++;
+            }
+            var dataFile = new GenericMsDataFile(filteredScans.ToArray(), sourceFile);
+            MzmlMethods.CreateAndWriteMyMzmlWithCalibratedSpectra(dataFile, outPath, true);
+        }
+
         public static GenericChart PlotPredictedRt(List<(int, string, double, float)> predictions)
         {
             var scatter = Chart2D.Chart.Point<double, float, string>(
@@ -200,6 +201,24 @@ namespace Test
             return scatter;
         }
 
+        [Test]
+        public static void TestParsing()
+        {
+            //var seq = "S[1 nucleotide substitution:S->C on S]QEELDEMGAPIDYLTPIVADADAGHGGLTAVFK";
+            //var modifiedSequence = ParseSubstitutedBaseSequence(seq);
+            //var mod4 = ParseSubstitutedFullSequence(seq);
+            var seq2 = "IVTEDC[Common Fixed:Carbamidomethyl on C]F[1 nucleotide substitution:F->Y on F]LQIDQSAITGESLAAEK";
+            //var modifiedSequence2 = ParseSubstitutedBaseSequence(seq2);
+            var mod3 = PsmValidations.ParseSubstitutedFullSequence(seq2);
+        }
+
+        [Test]
+        public static void PredictSpectra()
+        {
+            var libraryOutPath = @"E:\Aneuploidy\DDA\062525\RtPredictionResults\1614_noMod_HCD_predictions.msp";
+            var inputFilePath = @"E:\Aneuploidy\DDA\062525\RtPredictionResults\1614_noMod_ms2PipInput.tsv";
+            Ms2PIP.CheckAndRunMs2Pip(inputFilePath, null, null, libraryOutPath, "msp", false, false, "HCD", null);
+        }
         //public static (double, double) BuildCalibrationCurveFromUnmodifiedPeptides(List<PsmFromTsv> peptides)
         //{
         //    var calibration_1614 = new List<(double, float)>();
@@ -228,67 +247,65 @@ namespace Test
             seqFile.WriteResults(outPath);
         }
 
-    }
-
-    public class Ms2PipInput
-    {
-        public string peptidoform { get; set; }
-        public string spectrum_id { get; set; }
-
-        public Ms2PipInput(PsmFromTsv psmTsv)
+        public class Ms2PipInput
         {
-            string updatedFullSeq = psmTsv.FullSequence;
-            if (psmTsv.FullSequence.Contains("substitution"))
+            public string peptidoform { get; set; }
+            public string spectrum_id { get; set; }
+
+            public Ms2PipInput(PsmFromTsv psmTsv)
             {
-                updatedFullSeq = PsmValidations.ParseSubstitutedFullSequence(psmTsv.FullSequence);
+                string updatedFullSeq = psmTsv.FullSequence;
+                if (psmTsv.FullSequence.Contains("substitution"))
+                {
+                    updatedFullSeq = PsmValidations.ParseSubstitutedFullSequence(psmTsv.FullSequence);
+                }
+                peptidoform = ParseModsForMs2PipInput(updatedFullSeq) + "/" + psmTsv.PrecursorCharge;
+                spectrum_id = "scan" + psmTsv.Ms2ScanNumber.ToString() + ": " + psmTsv.FullSequence;
             }
-            peptidoform = ParseModsForMs2PipInput(updatedFullSeq) + "/" + psmTsv.PrecursorCharge;
-            spectrum_id = "scan" + psmTsv.Ms2ScanNumber.ToString() + ": " + psmTsv.FullSequence;
-        }
-        public Ms2PipInput() { }
+            public Ms2PipInput() { }
 
-        public static string ParseModsForMs2PipInput(string fullSequence)
-        {
-            // Regex matches [anything:ModificationName on X]
-            return Regex.Replace(
-                fullSequence,
-                @"\[[^\[\]:]*:[ ]*([A-Za-z]+)[^\[\]]*\]",
-                m => $"[{m.Groups[1].Value}]"
-            );
-        }
-    }
-
-    public class Ms2PipInputFile : ResultFile<Ms2PipInput>, IResultFile
-    {
-        public static CsvConfiguration CsvConfiguration = new CsvConfiguration(CultureInfo.InvariantCulture)
-        {
-            Delimiter = "\t",
-        };
-
-        public Ms2PipInputFile() : base() { }
-        public Ms2PipInputFile(string filePath) : base(filePath, Software.Unspecified) { }
-
-        public override void LoadResults()
-        {
-            using var csv = new CsvReader(new StreamReader(FilePath), CsvConfiguration);
-            Results = csv.GetRecords<Ms2PipInput>().ToList();
-        }
-
-        public string FullFileName { get; set; }
-        public override void WriteResults(string outputPath)
-        {
-            using var csv = new CsvWriter(new StreamWriter(File.Create(outputPath)), CsvConfiguration);
-
-            csv.WriteHeader<Ms2PipInput>();
-            foreach (var result in Results)
+            public static string ParseModsForMs2PipInput(string fullSequence)
             {
-                csv.NextRecord();
-                csv.WriteRecord(result);
+                // Regex matches [anything:ModificationName on X]
+                return Regex.Replace(
+                    fullSequence,
+                    @"\[[^\[\]:]*:[ ]*([A-Za-z]+)[^\[\]]*\]",
+                    m => $"[{m.Groups[1].Value}]"
+                );
             }
         }
 
-        public override SupportedFileType FileType { get; }
-        public override Software Software { get; set; }
-    }
+        public class Ms2PipInputFile : ResultFile<Ms2PipInput>, IResultFile
+        {
+            public static CsvConfiguration CsvConfiguration = new CsvConfiguration(CultureInfo.InvariantCulture)
+            {
+                Delimiter = "\t",
+            };
 
+            public Ms2PipInputFile() : base() { }
+            public Ms2PipInputFile(string filePath) : base(filePath, Software.Unspecified) { }
+
+            public override void LoadResults()
+            {
+                using var csv = new CsvReader(new StreamReader(FilePath), CsvConfiguration);
+                Results = csv.GetRecords<Ms2PipInput>().ToList();
+            }
+
+            public string FullFileName { get; set; }
+            public override void WriteResults(string outputPath)
+            {
+                using var csv = new CsvWriter(new StreamWriter(File.Create(outputPath)), CsvConfiguration);
+
+                csv.WriteHeader<Ms2PipInput>();
+                foreach (var result in Results)
+                {
+                    csv.NextRecord();
+                    csv.WriteRecord(result);
+                }
+            }
+
+            public override SupportedFileType FileType { get; }
+            public override Software Software { get; set; }
+        }
+    }
 }
