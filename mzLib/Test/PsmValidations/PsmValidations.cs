@@ -20,6 +20,10 @@ using Plotly.NET;
 using Readers.SpectralLibrary;
 using MassSpectrometry;
 using Chemistry;
+using MassSpectrometry.MzSpectra;
+using Omics.SpectrumMatch;
+using TorchSharp.Modules;
+using System.Security.Cryptography.X509Certificates;
 
 namespace Test
 {
@@ -44,15 +48,15 @@ namespace Test
             var filteredPsm_sub_1614 = FilterUniquePsmTsv(rtFilteredPsms_1614, psmtsv_noSub_1614);
             var filteredPep_sub_1614 = filteredPsm_sub_1614.GroupBy(p => p.FullSequence).Select(g => g.First()).ToList();
             var pepToWrite = filteredPep_sub_1614.Where(p => SpectrumMatchFromTsv.ParseModifications(ParseSubstitutedFullSequence(p.FullSequence)).Values.SelectMany(v => v).All(mod => mod == "Common Fixed:Carbamidomethyl on C" || mod == "Common Variable:Oxidation on M")).ToList();
-            var pep_noMod = psmtsv_sub_1614.Where(p => SpectrumMatchFromTsv.ParseModifications(p.FullSequence).Values.SelectMany(v => v).All(mod => mod == "Common Fixed:Carbamidomethyl on C")).GroupBy(p => p.FullSequence).Select(g => g.First()).ToList();
-            var decoys = SpectrumMatchTsvReader.ReadPsmTsv(psmFilePath_noSub_1614, out List<string> warnings3).Where(p => p.DecoyContamTarget == "D")
-                .Where(p => SpectrumMatchFromTsv.ParseModifications(p.FullSequence).Values.SelectMany(v => v).All(mod => mod == "Common Fixed:Carbamidomethyl on C")).GroupBy(p => p.FullSequence).Select(g => g.First()).ToList();
 
             //write Ms2Pip input file for spectral prediction
-            var libraryOutPath = @"E:\Aneuploidy\DDA\062525\RtPredictionResults\1614_HCDch2_decoys_predictions.msp";
-            var inputFilePath = @"E:\Aneuploidy\DDA\062525\RtPredictionResults\1614_decoy_ms2PipInput.tsv";
-            WriteMs2PipInputFileFromPsmTsv(decoys, inputFilePath);
-            Ms2PIP.CheckAndRunMs2Pip(inputFilePath, null, null, libraryOutPath, "msp", false, false, "HCDch2", null);
+            var libraryOutPath = @"E:\Aneuploidy\DDA\062525\RtPredictionResults\1614_HCDch2_oneSub_ms2pip.msp";
+            var inputFilePath = @"E:\Aneuploidy\DDA\062525\RtPredictionResults\1614_oneSub_ms2PipInput.tsv";
+            if (!File.Exists(libraryOutPath))
+            {
+                WriteMs2PipInputFileFromPsmTsv(pepToWrite, inputFilePath);
+                Ms2PIP.CheckAndRunMs2Pip(inputFilePath, null, null, libraryOutPath, "msp", false, false, "HCDch2", null);
+            }
 
             //Calculate spectal similarity
             var pathList = new List<string> { libraryOutPath };
@@ -61,8 +65,31 @@ namespace Test
             var rawPath = @"E:\Aneuploidy\DDA\071525\07-15-25_1614-R1-Q_E1+5-calib.mzML";
             var rawFile = MsDataFileReader.GetDataFile(rawPath);
             var ms2Scans = rawFile.GetAllScansList().Where(s => s.MsnOrder == 2).ToArray();
+            var filteredPsms = new List<PsmFromTsv>();
+            foreach (var psmTsv in filteredPsm_sub_1614)
+            {
+                var substitutedFullSeq = ParseSubstitutedFullSequence(psmTsv.FullSequence);
+                if (library.TryGetSpectrum(substitutedFullSeq, psmTsv.PrecursorCharge, out LibrarySpectrum libSpectrum))
+                {
+                    var rawScan = ms2Scans.FirstOrDefault(s => s.OneBasedScanNumber == psmTsv.Ms2ScanNumber);
+                    var similarity = new SpectralSimilarity(rawScan.MassSpectrum, libSpectrum, SpectralSimilarity.SpectrumNormalizationScheme.SquareRootSpectrumSum, 20, false);
+                    if (similarity.CosineSimilarity() >= 0.7) 
+                    {
+                        filteredPsms.Add(psmTsv);
+                    }
+                }
+            }
+
+            WriteOutScansForDenovo(filteredPsms, rawPath, @"E:\Aneuploidy\DDA\071525\1614_oneSub_denovo.mzML");
         }
 
+        [Test]
+        public static void TestWrittenFileReading()
+        {
+            var path = @"E:\Aneuploidy\DDA\071525\1614_oneSub_denovo.mzML";
+            var rawFile = MsDataFileReader.GetDataFile(path);
+            var scans = rawFile.GetAllScansList().ToList();
+        }
 
         [Test]
         public static void TrunctatedPeptides()
