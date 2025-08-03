@@ -6,6 +6,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using static TorchSharp.torch.nn;
 
 namespace Readers
 {
@@ -13,11 +14,17 @@ namespace Readers
     {
         public string DenovoSequence { get; set; }
         public string FullSequenceFromMM { get; set; }
+        public string ScanNumber { get; set; }
         public string Scores { get; set; }
 
         public CasanovoResult(string line)
         {
-            
+            var columns = line.Split('\t');
+            DenovoSequence = columns[1];
+            string[] parts = columns[14].Split(new[] { ": ", " " }, 3, StringSplitOptions.None);
+            FullSequenceFromMM = parts[2];
+            ScanNumber = parts[1];
+            Scores = columns[columns.Length - 1];
         }
         public CasanovoResult() { }
     }
@@ -29,20 +36,19 @@ namespace Readers
             Delimiter = "\t",
         };
 
-        public static void ReadInCasanovoResults(string path)
+        public static List<CasanovoResult> ReadInCasanovoResults(string path)
         {
-            var dataLines = new List<string>();
-
+            var allResults = new List<CasanovoResult>();
             foreach (var line in File.ReadLines(path))
             {
-                // Skip metadata lines (those starting with 'MTD', 'COM', etc.)
-                if (line.StartsWith("MTD") || line.StartsWith("COM") || string.IsNullOrWhiteSpace(line))
-                    continue;
-
                 // Only keep data table rows (e.g., PSM section starts with 'PSH' or 'PSM')
-                if (line.StartsWith("PSH") || line.StartsWith("PSM")) ;
-                    //var columns = line.Split('\t');
+                if (line.StartsWith("PSM"))
+                {
+                    var result = new CasanovoResult(line);
+                    allResults.Add(result);
+                }
             }
+            return allResults;
         }
 
         public CasanovoResultFile() : base() { }

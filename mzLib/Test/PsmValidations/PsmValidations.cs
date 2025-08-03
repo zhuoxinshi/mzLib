@@ -24,6 +24,7 @@ using MassSpectrometry.MzSpectra;
 using Omics.SpectrumMatch;
 using TorchSharp.Modules;
 using System.Security.Cryptography.X509Certificates;
+using System.Windows.Shapes;
 
 namespace Test
 {
@@ -47,7 +48,7 @@ namespace Test
             //filter out PSMs that can be explained by other PTMs
             var filteredPsm_sub_1614 = FilterUniquePsmTsv(rtFilteredPsms_1614, psmtsv_noSub_1614);
             var filteredPep_sub_1614 = filteredPsm_sub_1614.GroupBy(p => p.FullSequence).Select(g => g.First()).ToList();
-            var pepToWrite = filteredPep_sub_1614.Where(p => SpectrumMatchFromTsv.ParseModifications(ParseSubstitutedFullSequence(p.FullSequence)).Values.SelectMany(v => v).All(mod => mod == "Common Fixed:Carbamidomethyl on C" || mod == "Common Variable:Oxidation on M")).ToList();
+            var pepToWrite = filteredPep_sub_1614.Where(p => SpectrumMatchFromTsv.ParseModifications(Ms2PipInput.ParseSubstitutedFullSequence(p.FullSequence)).Values.SelectMany(v => v).All(mod => mod == "Common Fixed:Carbamidomethyl on C" || mod == "Common Variable:Oxidation on M")).ToList();
 
             //write Ms2Pip input file for spectral prediction
             var libraryOutPath = @"E:\Aneuploidy\DDA\062525\RtPredictionResults\1614_HCDch2_oneSub_ms2pip.msp";
@@ -68,7 +69,7 @@ namespace Test
             var filteredPsms = new List<PsmFromTsv>();
             foreach (var psmTsv in filteredPsm_sub_1614)
             {
-                var substitutedFullSeq = ParseSubstitutedFullSequence(psmTsv.FullSequence);
+                var substitutedFullSeq = Ms2PipInput.ParseSubstitutedFullSequence(psmTsv.FullSequence);
                 if (library.TryGetSpectrum(substitutedFullSeq, psmTsv.PrecursorCharge, out LibrarySpectrum libSpectrum))
                 {
                     var rawScan = ms2Scans.FirstOrDefault(s => s.OneBasedScanNumber == psmTsv.Ms2ScanNumber);
@@ -80,7 +81,16 @@ namespace Test
                 }
             }
 
-            WriteOutScansForDenovo(filteredPsms, rawPath, @"E:\Aneuploidy\DDA\071525\1614_oneSub_denovo.mzML");
+            var fileteredScanOutPath = @"E:\Aneuploidy\DDA\071525\1614_oneSub_denovo.mzML";
+            WriteOutScansForDenovo(filteredPsms, rawPath, fileteredScanOutPath);
+        }
+
+        [Test]
+        public static void CasanovoOneSubOnly()
+        {
+            var path = @"E:\Aneuploidy\DDA\071525\casanovo_20250731231227.mztab";
+            var casanovoResults = CasanovoResultFile.ReadInCasanovoResults(path.Replace(".mzML", ".mztab"));
+            var filteredResults = casanovoResults.Where(r => IBioPolymerWithSetMods.GetBaseSequenceFromFullSequence(Ms2PipInput.ParseSubstitutedFullSequence(r.FullSequenceFromMM)) == r.DenovoSequence).ToList();
         }
 
         [Test]
@@ -110,41 +120,6 @@ namespace Test
             var pep_noSub_1611_trunc = pep_noSub_1611.Where(p => p.BaseSeq.Last() != 'K' && p.BaseSeq.Last() != 'R').ToList();
             //psm.BaseSeq.Last() != 'K' && psm.BaseSeq.Last() != 'R'
         }
-
-        public static string ParseSubstitutedFullSequence(string fullSequence)
-        {
-            var subMatch = Regex.Match(fullSequence, @"\[(\d+)[^\:]*:([A-Z])->([A-Z])");
-            if (!subMatch.Success)
-                return fullSequence; // No substitution found
-
-            int position = int.Parse(subMatch.Groups[1].Value) - 1; // 0-based
-            char newAminoAcid = subMatch.Groups[3].Value[0];
-
-            // Remove only the substitution annotation
-            string cleaned = Regex.Replace(fullSequence, @"\[\d+[^\]]*substitution:[A-Z]->[A-Z][^\]]*\]", "");
-
-            // Find the index after the last closing bracket (end of all annotations)
-            int seqStart = cleaned.LastIndexOf(']') + 1;
-            if (seqStart < 0 || seqStart >= cleaned.Length)
-                return cleaned; // No sequence found
-
-            // The sequence is everything after the last bracket
-            string prefix = cleaned.Substring(0, seqStart);
-            string sequence = cleaned.Substring(seqStart);
-
-            // Only substitute if the sequence is long enough
-            if (sequence.Length > position)
-            {
-                char[] seqArray = sequence.ToCharArray();
-                seqArray[position] = newAminoAcid;
-                string modifiedSequence = new string(seqArray);
-                return prefix + modifiedSequence;
-            }
-
-            // If not long enough, return cleaned string
-            return cleaned;
-        }
-
 
         public static List<PsmFromTsv> FilterUniquePsmTsv(List<PsmFromTsv> psmsWithSub, List<PsmFromTsv> psmsWithoutSub)
         {
@@ -178,7 +153,7 @@ namespace Test
                 var allMods = SpectrumMatchFromTsv.ParseModifications(psm.FullSequence).Values.SelectMany(m => m).ToList();
                 if (allMods.Any(m => m.Contains("substitution")))
                 {
-                    string modifiedFullSeq = ParseSubstitutedFullSequence(psm.FullSequence);
+                    string modifiedFullSeq = Ms2PipInput.ParseSubstitutedFullSequence(psm.FullSequence);
                     string modifiedBaseSeq = IBioPolymerWithSetMods.GetBaseSequenceFromFullSequence(modifiedFullSeq);
                     var predictedRt = ChronologerEstimator.PredictRetentionTime(modifiedBaseSeq, modifiedFullSeq);
                     predictions.Add((psm.Ms2ScanNumber, psm.FullSequence, psm.RetentionTime, predictedRt));
@@ -220,7 +195,6 @@ namespace Test
             MzmlMethods.CreateAndWriteMyMzmlWithCalibratedSpectra(dataFile, outPath, true);
         }
 
-        
         public static GenericChart PlotPredictedRt(List<(int, string, double, float)> predictions)
         {
             var scatter = Chart2D.Chart.Point<double, float, string>(
@@ -237,7 +211,7 @@ namespace Test
             //var mod4 = ParseSubstitutedFullSequence(seq);
             var seq2 = "IVTEDC[Common Fixed:Carbamidomethyl on C]F[1 nucleotide substitution:F->Y on F]LQIDQSAITGESLAAEK";
             //var modifiedSequence2 = ParseSubstitutedBaseSequence(seq2);
-            var mod3 = PsmValidations.ParseSubstitutedFullSequence(seq2);
+            var mod3 = Ms2PipInput.ParseSubstitutedFullSequence(seq2);
         }
 
         [Test]
@@ -247,6 +221,7 @@ namespace Test
             var inputFilePath = @"E:\Aneuploidy\DDA\062525\RtPredictionResults\1614_noMod_ms2PipInput.tsv";
             Ms2PIP.CheckAndRunMs2Pip(inputFilePath, null, null, libraryOutPath, "msp", false, false, "HCD", null);
         }
+
         //public static (double, double) BuildCalibrationCurveFromUnmodifiedPeptides(List<PsmFromTsv> peptides)
         //{
         //    var calibration_1614 = new List<(double, float)>();
@@ -275,65 +250,25 @@ namespace Test
             seqFile.WriteResults(outPath);
         }
 
-        public class Ms2PipInput
+        
+
+        [Test]
+        public static void TestCasanovoFileReading()
         {
-            public string peptidoform { get; set; }
-            public string spectrum_id { get; set; }
-
-            public Ms2PipInput(PsmFromTsv psmTsv)
+            var path = @"E:\Aneuploidy\DDA\071525\casanovo_20250731231227.mztab";
+            foreach (var line in File.ReadLines(path))
             {
-                string updatedFullSeq = psmTsv.FullSequence;
-                if (psmTsv.FullSequence.Contains("substitution"))
+                // Skip metadata lines (those starting with 'MTD', 'COM', etc.)
+                if (line.StartsWith("MTD") || line.StartsWith("COM") || line.StartsWith("PSH") || string.IsNullOrWhiteSpace(line))
+                    continue;
+
+                // Only keep data table rows (e.g., PSM section starts with 'PSH' or 'PSM')
+                if (line.StartsWith("PSM"))
                 {
-                    updatedFullSeq = PsmValidations.ParseSubstitutedFullSequence(psmTsv.FullSequence);
-                }
-                peptidoform = ParseModsForMs2PipInput(updatedFullSeq) + "/" + psmTsv.PrecursorCharge;
-                spectrum_id = "scan" + psmTsv.Ms2ScanNumber.ToString() + ": " + psmTsv.FullSequence;
-            }
-            public Ms2PipInput() { }
-
-            public static string ParseModsForMs2PipInput(string fullSequence)
-            {
-                // Regex matches [anything:ModificationName on X]
-                return Regex.Replace(
-                    fullSequence,
-                    @"\[[^\[\]:]*:[ ]*([A-Za-z]+)[^\[\]]*\]",
-                    m => $"[{m.Groups[1].Value}]"
-                );
-            }
-        }
-
-        public class Ms2PipInputFile : ResultFile<Ms2PipInput>, IResultFile
-        {
-            public static CsvConfiguration CsvConfiguration = new CsvConfiguration(CultureInfo.InvariantCulture)
-            {
-                Delimiter = "\t",
-            };
-
-            public Ms2PipInputFile() : base() { }
-            public Ms2PipInputFile(string filePath) : base(filePath, Software.Unspecified) { }
-
-            public override void LoadResults()
-            {
-                using var csv = new CsvReader(new StreamReader(FilePath), CsvConfiguration);
-                Results = csv.GetRecords<Ms2PipInput>().ToList();
-            }
-
-            public string FullFileName { get; set; }
-            public override void WriteResults(string outputPath)
-            {
-                using var csv = new CsvWriter(new StreamWriter(File.Create(outputPath)), CsvConfiguration);
-
-                csv.WriteHeader<Ms2PipInput>();
-                foreach (var result in Results)
-                {
-                    csv.NextRecord();
-                    csv.WriteRecord(result);
+                    var columns = line.Split('\t');
+                    var denovoResult = new CasanovoResult(line);
                 }
             }
-
-            public override SupportedFileType FileType { get; }
-            public override Software Software { get; set; }
         }
     }
 }
