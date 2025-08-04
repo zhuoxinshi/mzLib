@@ -56,7 +56,7 @@ namespace Test
             var pathList = new List<string> { libraryOutPath };
             var library = new SpectralLibrary(pathList);
             var librarySpectra = library.GetAllLibrarySpectra().ToList();
-            var rawPath = @"E:\Aneuploidy\DDA\071525\07-15-25_1614-R1-Q_E1+5-calib.mzML";
+            var rawPath = @"E:\Aneuploidy\DDA\071525\1611_E1-8_cali-generalGPTMD_noTrunc\Task1-CalibrateTask\07-15-25_1611-R1-Q_E1+5-calib.mzML";
             var rawFile = MsDataFileReader.GetDataFile(rawPath);
             var ms2Scans = rawFile.GetAllScansList().Where(s => s.MsnOrder == 2).ToArray();
             var filteredPsms = new List<PsmFromTsv>();
@@ -74,7 +74,7 @@ namespace Test
                 }
             }
 
-            var fileteredScanOutPath = @"E:\Aneuploidy\DDA\071525\RtPredictionResults\1614_commonMods+oneNAsub_denovo.mzML";
+            var fileteredScanOutPath = @"E:\Aneuploidy\DDA\071525\RtPredictionResults\1611-E1+5_commonMods+oneNAsub_denovo.mzML";
             WriteOutScansForDenovo(filteredPsms, rawPath, fileteredScanOutPath);
         }
 
