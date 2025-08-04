@@ -26,17 +26,17 @@ namespace Test
         [Test]
         public static void OneSubOnly()
         {
-            var psmFilePath_sub_1614 = @"E:\Aneuploidy\DDA\071525\1614_E1-8_calied-generalGPTMD+1NAsub_noTrunc\Task2-SearchTask\Individual File Results\07-15-25_1614-R1-Q_E1+5-calib_PSMs.psmtsv";
+            var psmFilePath_sub_1614 = @"E:\Aneuploidy\DDA\071525\1611_E1-8_calied-generalGPTMD+1NAsub_noTrunc\Task2-SearchTask\Individual File Results\07-15-25_1611-R1-Q_E1+5-calib_PSMs.psmtsv";
             var psmtsv_sub_1614 = SpectrumMatchTsvReader.ReadPsmTsv(psmFilePath_sub_1614, out List<string> warnings).Where(p => p.DecoyContamTarget == "T" && p.QValue <= 0.01).ToList();
-            var psmFilePath_noSub_1614 = @"E:\Aneuploidy\DDA\071525\1614_E1-8_cali-generalGPTMD_noTrunc\Task3-SearchTask\Individual File Results\07-15-25_1614-R1-Q_E1+5-calib_PSMs.psmtsv";
+            var psmFilePath_noSub_1614 = @"E:\Aneuploidy\DDA\071525\1611_E1-8_cali-generalGPTMD_noTrunc\Task3-SearchTask\Individual File Results\07-15-25_1611-R1-Q_E1+5-calib_PSMs.psmtsv";
             var psmtsv_noSub_1614 = SpectrumMatchTsvReader.ReadPsmTsv(psmFilePath_noSub_1614, out List<string> warnings2).Where(p => p.DecoyContamTarget == "T" && p.QValue <= 0.01).ToList();
 
             //candidate PSMs that have a substitution
             var psmtsvWithSub_1614 = psmtsv_sub_1614.Where(p => p.FullSequence.Contains("substitution")).ToList();
 
             //filter out PSMs where the predicted RT is considered as an outlier
-            var rtFilteredPsms_1614 = FilterPsmTsvFromPredictedRT(psmtsvWithSub_1614, 1, 1.68, out List<(int, string, double, float)> filteredPredictions);
-            //PlotPredictedRt(filteredPredictions).Show();
+            var rtFilteredPsms_1614 = FilterPsmTsvFromPredictedRT(psmtsvWithSub_1614, 0.5, 1.96, out List<(int, string, double, float)> filteredPredictions);
+            PlotPredictedRt(filteredPredictions).Show();
 
             //filter out PSMs that can be explained by other PTMs
             var filteredPsm_sub_1614 = FilterUniquePsmTsv(rtFilteredPsms_1614, psmtsv_noSub_1614);
@@ -44,8 +44,8 @@ namespace Test
             var pepToWrite = filteredPep_sub_1614.Where(p => SpectrumMatchFromTsv.ParseModifications(Ms2PipInput.ParseSubstitutedFullSequence(p.FullSequence)).Values.SelectMany(v => v).All(mod => mod == "Common Fixed:Carbamidomethyl on C" || mod == "Common Variable:Oxidation on M")).ToList();
 
             //write Ms2Pip input file for spectral prediction
-            var libraryOutPath = @"E:\Aneuploidy\DDA\062525\RtPredictionResults\1614_HCDch2_oneSub_ms2pip.msp";
-            var inputFilePath = @"E:\Aneuploidy\DDA\062525\RtPredictionResults\1614_oneSub_ms2PipInput.tsv";
+            var libraryOutPath = @"E:\Aneuploidy\DDA\071525\RtPredictionResults\1611-E1+5_HCDch2_commonMods+oneNAsub_ms2pip.msp";
+            var inputFilePath = @"E:\Aneuploidy\DDA\071525\RtPredictionResults\1611-E1+5_commonMods+oneNAsub_ms2PipInput.tsv";
             if (!File.Exists(libraryOutPath))
             {
                 WriteMs2PipInputFileFromPsmTsv(pepToWrite, inputFilePath);
@@ -74,7 +74,7 @@ namespace Test
                 }
             }
 
-            var fileteredScanOutPath = @"E:\Aneuploidy\DDA\071525\1614_oneSub_denovo.mzML";
+            var fileteredScanOutPath = @"E:\Aneuploidy\DDA\071525\RtPredictionResults\1614_commonMods+oneNAsub_denovo.mzML";
             WriteOutScansForDenovo(filteredPsms, rawPath, fileteredScanOutPath);
         }
 
@@ -96,9 +96,9 @@ namespace Test
         [Test]
         public static void CasanovoOneSubOnly()
         {
-            var path = @"E:\Aneuploidy\DDA\071525\casanovo_20250731231227.mztab";
-            var casanovoResults = CasanovoResultFile.ReadInCasanovoResults(path.Replace(".mzML", ".mztab"));
-            var filteredResults = casanovoResults.Where(r => IBioPolymerWithSetMods.GetBaseSequenceFromFullSequence(Ms2PipInput.ParseSubstitutedFullSequence(r.FullSequenceFromMM)) == r.DenovoSequence).ToList();
+            var path = @"E:\Aneuploidy\DDA\071525\RtPredictionResults\casanovo_20250804124815.mztab";
+            var casanovoResults = CasanovoResultFile.ReadInCasanovoResults(path);
+            var filteredResults = casanovoResults.Where(r => IBioPolymerWithSetMods.GetBaseSequenceFromFullSequence(Ms2PipInput.ParseSubstitutedFullSequence(r.FullSequenceFromMM)) == IBioPolymerWithSetMods.GetBaseSequenceFromFullSequence(r.DenovoSequence)).ToList();
         }
 
         [Test]
