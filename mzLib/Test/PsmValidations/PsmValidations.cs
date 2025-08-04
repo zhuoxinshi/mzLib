@@ -8,10 +8,6 @@ using TopDownProteomics;
 using System.Text.RegularExpressions;
 using Omics;
 using MathNet.Numerics.Statistics;
-using MathNet.Numerics;
-using CsvHelper.Configuration;
-using CsvHelper;
-using System.Globalization;
 using System.IO;
 using Readers;
 using Proteomics;
@@ -22,9 +18,6 @@ using MassSpectrometry;
 using Chemistry;
 using MassSpectrometry.MzSpectra;
 using Omics.SpectrumMatch;
-using TorchSharp.Modules;
-using System.Security.Cryptography.X509Certificates;
-using System.Windows.Shapes;
 
 namespace Test
 {
@@ -85,6 +78,21 @@ namespace Test
             WriteOutScansForDenovo(filteredPsms, rawPath, fileteredScanOutPath);
         }
 
+        [Test]
+        public static void TestNormal()
+        {
+            var psmFilePath_sub_1614 = @"E:\Aneuploidy\DDA\071525\1614_E1-8_calied-generalGPTMD+1NAsub_noTrunc\Task2-SearchTask\Individual File Results\07-15-25_1614-R1-Q_E1+5-calib_PSMs.psmtsv";
+            var psmtsv_sub_1614 = SpectrumMatchTsvReader.ReadPsmTsv(psmFilePath_sub_1614, out List<string> warnings).Where(p => p.DecoyContamTarget == "T" && p.QValue <= 0.01).ToList();
+            var psmFilePath_noSub_1614 = @"E:\Aneuploidy\DDA\071525\1614_E1-8_cali-generalGPTMD_noTrunc\Task3-SearchTask\Individual File Results\07-15-25_1614-R1-Q_E1+5-calib_PSMs.psmtsv";
+            var psmtsv_noSub_1614 = SpectrumMatchTsvReader.ReadPsmTsv(psmFilePath_noSub_1614, out List<string> warnings2).Where(p => p.DecoyContamTarget == "T" && p.QValue <= 0.01).ToList();
+
+            var psmsWithMod = psmtsv_sub_1614.Where(p => p.FullSequence.Contains("[")).ToList();
+            var testPep = psmsWithMod.Where(p => SpectrumMatchFromTsv.ParseModifications(p.FullSequence).Values.SelectMany(v => v).All(mod => mod == "Common Fixed:Carbamidomethyl on C" || mod == "Common Variable:Oxidation on M")).GroupBy(p => p.FullSequence).Select(g => g.First()).ToList();
+            var rawPath = @"E:\Aneuploidy\DDA\071525\07-15-25_1614-R1-Q_E1+5-calib.mzML";
+
+            var fileteredScanOutPath = @"E:\Aneuploidy\DDA\071525\1614_testNormal_denovo.mzML";
+            WriteOutScansForDenovo(testPep, rawPath, fileteredScanOutPath);
+        }
         [Test]
         public static void CasanovoOneSubOnly()
         {
