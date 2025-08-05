@@ -18,6 +18,7 @@ using MassSpectrometry;
 using Chemistry;
 using MassSpectrometry.MzSpectra;
 using Omics.SpectrumMatch;
+using System.Windows.Shapes;
 
 namespace Test
 {
@@ -86,13 +87,19 @@ namespace Test
             var psmFilePath_noSub_1614 = @"E:\Aneuploidy\DDA\071525\1614_E1-8_cali-generalGPTMD_noTrunc\Task3-SearchTask\Individual File Results\07-15-25_1614-R1-Q_E1+5-calib_PSMs.psmtsv";
             var psmtsv_noSub_1614 = SpectrumMatchTsvReader.ReadPsmTsv(psmFilePath_noSub_1614, out List<string> warnings2).Where(p => p.DecoyContamTarget == "T" && p.QValue <= 0.01).ToList();
 
-            var psmsWithMod = psmtsv_sub_1614.Where(p => p.FullSequence.Contains("[")).ToList();
-            var testPep = psmsWithMod.Where(p => SpectrumMatchFromTsv.ParseModifications(p.FullSequence).Values.SelectMany(v => v).All(mod => mod == "Common Fixed:Carbamidomethyl on C" || mod == "Common Variable:Oxidation on M")).GroupBy(p => p.FullSequence).Select(g => g.First()).ToList();
+            var psmsNoMod = psmtsv_sub_1614.Where(p => !p.FullSequence.Contains("[")).ToList();
+            //var testPep = psmsWithMod.Where(p => SpectrumMatchFromTsv.ParseModifications(p.FullSequence).Values.SelectMany(v => v).All(mod => mod == "Common Fixed:Carbamidomethyl on C" || mod == "Common Variable:Oxidation on M")).GroupBy(p => p.FullSequence).Select(g => g.First()).ToList();
+            var testPep = psmsNoMod.GroupBy(p => p.FullSequence).Select(g => g.First()).ToList();
             var rawPath = @"E:\Aneuploidy\DDA\071525\07-15-25_1614-R1-Q_E1+5-calib.mzML";
 
-            var fileteredScanOutPath = @"E:\Aneuploidy\DDA\071525\1614_testNormal_denovo.mzML";
+            var fileteredScanOutPath = @"E:\Aneuploidy\DDA\071525\RtPredictionResults\1614_testNoMod_denovo.mzML";
             WriteOutScansForDenovo(testPep, rawPath, fileteredScanOutPath);
+
+            var resultPath = @"E:\Aneuploidy\DDA\071525\casanovo_20250803233015.mztab";
+            var casanovoResults = CasanovoResultFile.ReadInCasanovoResults(resultPath);
+            var filteredResults = casanovoResults.Where(r => IBioPolymerWithSetMods.GetBaseSequenceFromFullSequence(r.FullSequenceFromMM) == IBioPolymerWithSetMods.GetBaseSequenceFromFullSequence(r.DenovoSequence)).ToList();
         }
+
         [Test]
         public static void CasanovoOneSubOnly()
         {
@@ -117,16 +124,8 @@ namespace Test
             var psmFilePath_noSub_1614_pep = @"E:\Aneuploidy\DDA\062525\1614_E1-8_calied-gptmd(bioMods)-xml+trunc\Task2-SearchTask\Individual File Results\06-26-25_1614-R1-Q_E1+5-calib_Peptides.psmtsv";
             var pep_noSub_1614 = SpectrumMatchTsvReader.ReadPsmTsv(psmFilePath_noSub_1614_pep, out List<string> warnings2).Where(p => p.DecoyContamTarget == "T" && p.QValue <= 0.01).ToList();
 
-            var pepFilePath_sub_1611 = @"E:\Aneuploidy\DDA\062525\1611_E1-8_cali-gptmd(bioMods+1NAsub)-xml+trunc\Task3-SearchTask\Individual File Results\06-25-25_1611-R1-Q_E1+5-calib_Peptides.psmtsv";
-            var pep_sub_1611 = SpectrumMatchTsvReader.ReadPsmTsv(pepFilePath_sub_1611, out List<string> warnings3).Where(p => p.DecoyContamTarget == "T" && p.QValue <= 0.01).ToList();
-            var psmFilePath_noSub_1611_pep = @"E:\Aneuploidy\DDA\062525\1611_E1-8_calied-gptmd(bioMods)-xml+trunc\Task2-SearchTask\Individual File Results\06-25-25_1611-R1-Q_E1+5-calib_Peptides.psmtsv";
-            var pep_noSub_1611 = SpectrumMatchTsvReader.ReadPsmTsv(psmFilePath_noSub_1611_pep, out List<string> warnings4).Where(p => p.DecoyContamTarget == "T" && p.QValue <= 0.01).ToList();
-
             var pep_sub_1614_trunc = pep_sub_1614.Where(p => p.BaseSeq.Last() != 'K' && p.BaseSeq.Last() != 'R').ToList();
             var pep_noSub_1614_trunc = pep_noSub_1614.Where(p => p.BaseSeq.Last() != 'K' && p.BaseSeq.Last() != 'R').ToList();
-            var pep_sub_1611_trunc = pep_sub_1611.Where(p => p.BaseSeq.Last() != 'K' && p.BaseSeq.Last() != 'R').ToList();
-            var pep_noSub_1611_trunc = pep_noSub_1611.Where(p => p.BaseSeq.Last() != 'K' && p.BaseSeq.Last() != 'R').ToList();
-            //psm.BaseSeq.Last() != 'K' && psm.BaseSeq.Last() != 'R'
         }
 
         public static List<PsmFromTsv> FilterUniquePsmTsv(List<PsmFromTsv> psmsWithSub, List<PsmFromTsv> psmsWithoutSub)
