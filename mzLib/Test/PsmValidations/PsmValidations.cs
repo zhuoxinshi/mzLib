@@ -19,6 +19,7 @@ using Chemistry;
 using MassSpectrometry.MzSpectra;
 using Omics.SpectrumMatch;
 using System.Windows.Shapes;
+using MathNet.Numerics;
 
 namespace Test
 {
@@ -27,22 +28,23 @@ namespace Test
         [Test]
         public static void OneSubOnly()
         {
-            var psmFilePath_sub_1614 = @"E:\Aneuploidy\DDA\071525\1611_E1-8_calied-generalGPTMD+1NAsub_noTrunc\Task2-SearchTask\Individual File Results\07-15-25_1611-R1-Q_E1+5-calib_PSMs.psmtsv";
-            var psmtsv_sub_1614 = SpectrumMatchTsvReader.ReadPsmTsv(psmFilePath_sub_1614, out List<string> warnings).Where(p => p.DecoyContamTarget == "T" && p.QValue <= 0.01).ToList();
-            var psmFilePath_noSub_1614 = @"E:\Aneuploidy\DDA\071525\1611_E1-8_cali-generalGPTMD_noTrunc\Task3-SearchTask\Individual File Results\07-15-25_1611-R1-Q_E1+5-calib_PSMs.psmtsv";
-            var psmtsv_noSub_1614 = SpectrumMatchTsvReader.ReadPsmTsv(psmFilePath_noSub_1614, out List<string> warnings2).Where(p => p.DecoyContamTarget == "T" && p.QValue <= 0.01).ToList();
+            var psmFilePath_sub = @"E:\Aneuploidy\DDA\071525\1611_E1-8_calied-generalGPTMD+1NAsub_noTrunc\Task2-SearchTask\Individual File Results\07-15-25_1611-R1-Q_E1+5-calib_PSMs.psmtsv";
+            var psmtsv_sub = SpectrumMatchTsvReader.ReadPsmTsv(psmFilePath_sub, out List<string> warnings).Where(p => p.DecoyContamTarget == "T" && p.QValue <= 0.01).ToList();
+            var psmFilePath_noSub = @"E:\Aneuploidy\DDA\071525\1611_E1-8_cali-generalGPTMD_noTrunc\Task3-SearchTask\Individual File Results\07-15-25_1611-R1-Q_E1+5-calib_PSMs.psmtsv";
+            var psmtsv_noSub = SpectrumMatchTsvReader.ReadPsmTsv(psmFilePath_noSub, out List<string> warnings2).Where(p => p.DecoyContamTarget == "T" && p.QValue <= 0.01).ToList();
 
             //candidate PSMs that have a substitution
-            var psmtsvWithSub_1614 = psmtsv_sub_1614.Where(p => p.FullSequence.Contains("substitution")).ToList();
+            var psmtsvWithSub = psmtsv_sub.Where(p => p.FullSequence.Contains("substitution")).ToList();
 
             //filter out PSMs where the predicted RT is considered as an outlier
-            var rtFilteredPsms_1614 = FilterPsmTsvFromPredictedRT(psmtsvWithSub_1614, 0.5, 1.96, out List<(int, string, double, float)> filteredPredictions);
+            //var rtFilteredPsms = FilterPsmTsvFromPredictedRT(psmtsvWithSub, 0.5, 1.96, out List<(int, string, double, float)> filteredPredictions);
+            var rtFilteredPsms = RtFilterByCalibrationLine(psmtsvWithSub, 2, out List<(int, string, double, float)> filteredPredictions);
             PlotPredictedRt(filteredPredictions).Show();
 
             //filter out PSMs that can be explained by other PTMs
-            var filteredPsm_sub_1614 = FilterUniquePsmTsv(rtFilteredPsms_1614, psmtsv_noSub_1614);
-            var filteredPep_sub_1614 = filteredPsm_sub_1614.GroupBy(p => p.FullSequence).Select(g => g.First()).ToList();
-            var pepToWrite = filteredPep_sub_1614.Where(p => SpectrumMatchFromTsv.ParseModifications(Ms2PipInput.ParseSubstitutedFullSequence(p.FullSequence)).Values.SelectMany(v => v).All(mod => mod == "Common Fixed:Carbamidomethyl on C" || mod == "Common Variable:Oxidation on M")).ToList();
+            var filteredPsm_sub = FilterUniquePsmTsv(rtFilteredPsms, psmtsv_noSub);
+            var filteredPep_sub = filteredPsm_sub.GroupBy(p => p.FullSequence).Select(g => g.First()).ToList();
+            var pepToWrite = filteredPep_sub.Where(p => SpectrumMatchFromTsv.ParseModifications(Ms2PipInput.ParseSubstitutedFullSequence(p.FullSequence)).Values.SelectMany(v => v).All(mod => mod == "Common Fixed:Carbamidomethyl on C" || mod == "Common Variable:Oxidation on M")).ToList();
 
             //write Ms2Pip input file for spectral prediction
             var libraryOutPath = @"E:\Aneuploidy\DDA\071525\RtPredictionResults\1611-E1+5_HCDch2_commonMods+oneNAsub_ms2pip.msp";
@@ -61,7 +63,7 @@ namespace Test
             var rawFile = MsDataFileReader.GetDataFile(rawPath);
             var ms2Scans = rawFile.GetAllScansList().Where(s => s.MsnOrder == 2).ToArray();
             var filteredPsms = new List<PsmFromTsv>();
-            foreach (var psmTsv in filteredPsm_sub_1614)
+            foreach (var psmTsv in filteredPsm_sub)
             {
                 var substitutedFullSeq = Ms2PipInput.ParseSubstitutedFullSequence(psmTsv.FullSequence);
                 if (library.TryGetSpectrum(substitutedFullSeq, psmTsv.PrecursorCharge, out LibrarySpectrum libSpectrum))
@@ -149,14 +151,60 @@ namespace Test
         public static List<PsmFromTsv> FilterPsmTsvFromPredictedRT(List<PsmFromTsv> psms, double rtWindow, double zScoreCutOff, out List<(int, string, double, float)> filteredPredictions)
         {
             var filteredPsms = new List<PsmFromTsv>();
-            var predictions = new List<(int, string, double, float)>();
+            var predictions = GetAllRtPredictions(psms);
             filteredPredictions = new List<(int, string, double, float)>();
+            PlotPredictedRt(predictions).Show();
+            foreach (var prediction in predictions)
+            {
+                var localPredictions = predictions.Where(p => Math.Abs(p.Item3 - prediction.Item3) <= rtWindow).ToList();
+                //PlotPredictedRt(localPredictions).Show();
+                var zScore = (prediction.Item4 - localPredictions.Select(p => p.Item4).Average()) / localPredictions.Select(p => p.Item4).StandardDeviation();
+                if (Math.Abs(zScore) < zScoreCutOff)
+                {
+                    filteredPsms.Add(psms.FirstOrDefault(p => p.Ms2ScanNumber == prediction.Item1 && p.FullSequence == prediction.Item2));
+                    filteredPredictions.Add(prediction);
+                }
+                else
+                {
+                    int stop = 1;
+                    //PlotPredictedRt(localPredictions).Show();
+                }
+            }
+            return filteredPsms;
+        }
+        
+        public static List<PsmFromTsv> RtFilterByCalibrationLine(List<PsmFromTsv> psms, double sdThreshold, out List<(int, string, double, float)> filteredPredictions)
+        {
+            var filteredPsms = new List<PsmFromTsv>();
+            filteredPredictions = new List<(int, string, double, float)>();
+            var predictions = GetAllRtPredictions(psms);
+            
+            var (intercept, slope) = Fit.Line(predictions.Select(p => p.Item3).ToArray(), predictions.Select(p => (double)p.Item4).ToArray());
+            var residualSd = Math.Sqrt(predictions.Sum(p => Math.Pow(p.Item4 - intercept + slope * p.Item3, 2)) / (predictions.Count - 2));
+            foreach (var prediction in predictions)
+            {
+                var predicted = intercept + slope * prediction.Item3;
+                if (Math.Abs(predicted - prediction.Item4) <= residualSd * sdThreshold)
+                {
+                    filteredPsms.Add(psms.FirstOrDefault(p => p.Ms2ScanNumber == prediction.Item1 && p.FullSequence == prediction.Item2));
+                    filteredPredictions.Add(prediction);
+                }
+                else
+                {
+                    int stop = 1;
+                    //PlotPredictedRt(localPredictions).Show();
+                }
+            }
+            return filteredPsms;
+        }
+
+        private static List<(int, string, double, float)> GetAllRtPredictions(List<PsmFromTsv> psms)
+        {
+            //MS2 scan number, full sequence, retention time, predicted retention time
+            var predictions = new List<(int, string, double, float)>();
             foreach (var psm in psms)
             {
-                if (psm.FullSequence.Contains("|"))
-                {
-                    continue;
-                }
+                if (psm.FullSequence.Contains("|")) continue;
                 var allMods = SpectrumMatchFromTsv.ParseModifications(psm.FullSequence).Values.SelectMany(m => m).ToList();
                 if (allMods.Any(m => m.Contains("substitution")))
                 {
@@ -171,17 +219,7 @@ namespace Test
                     predictions.Add((psm.Ms2ScanNumber, psm.FullSequence, psm.RetentionTime, predictedRt));
                 }
             }
-            foreach (var prediction in predictions)
-            {
-                var localPredictions = predictions.Where(p => Math.Abs(p.Item3 - prediction.Item3) <= rtWindow).ToList();
-                var zScore = (prediction.Item4 - localPredictions.Select(p => p.Item4).Average()) / localPredictions.Select(p => p.Item4).StandardDeviation();
-                if (Math.Abs(zScore) < zScoreCutOff)
-                {
-                    filteredPsms.Add(psms.FirstOrDefault(p => p.Ms2ScanNumber == prediction.Item1 && p.FullSequence == prediction.Item2));
-                    filteredPredictions.Add(prediction);
-                }
-            }
-            return filteredPsms;
+            return predictions;
         }
 
         public static void WriteOutScansForDenovo(List<PsmFromTsv> psmTsvs, string rawFilePath, string outPath)
@@ -228,18 +266,6 @@ namespace Test
             var inputFilePath = @"E:\Aneuploidy\DDA\062525\RtPredictionResults\1614_noMod_ms2PipInput.tsv";
             Ms2PIP.CheckAndRunMs2Pip(inputFilePath, null, null, libraryOutPath, "msp", false, false, "HCD", null);
         }
-
-        //public static (double, double) BuildCalibrationCurveFromUnmodifiedPeptides(List<PsmFromTsv> peptides)
-        //{
-        //    var calibration_1614 = new List<(double, float)>();
-        //    foreach (var pep in peptides)
-        //    {
-        //        var prediction = ChronologerEstimator.PredictRetentionTime(pep.BaseSeq, pep.FullSequence);
-        //        calibration_1614.Add((pep.RetentionTime.Value, prediction));
-        //    }
-        //    var (intercept, slope) = Fit.Line(calibration_1614.Select(p => p.Item1).ToArray(), calibration_1614.Select(p => (double)p.Item2).ToArray());
-        //    return (intercept, slope);
-        //}
 
         public static void WriteMs2PipInputFileFromPsmTsv(List<PsmFromTsv> psmTsvList, string outPath)
         {
