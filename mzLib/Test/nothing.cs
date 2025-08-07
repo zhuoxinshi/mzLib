@@ -7,6 +7,8 @@ using Readers;
 using NUnit.Framework;
 using MassSpectrometry;
 using System.IO;
+using System.Text.RegularExpressions;
+using System.Windows.Interop;
 
 namespace Test
 {
@@ -34,12 +36,30 @@ namespace Test
             var osmPath = @"E:\Temp\AllOSMs.osmtsv";
             var allOsms = SpectrumMatchTsvReader.ReadOsmTsv(osmPath, out List<string> warnings).ToList();
 
-            var cidEnergys = new List<string>();
+            var cidEnergys = new List<double>();
+            string pattern = $@"cid(\d+)";
             foreach (var osm in allOsms)
             {
                 var ms2Scan = dictionary[osm.FileName].First(s => s.OneBasedScanNumber == osm.Ms2ScanNumber);
-
+                var match = Regex.Match(ms2Scan.ScanFilter, pattern);
+                double voltage = double.Parse(match.Groups[1].Value);
+                cidEnergys.Add(voltage);
             }
+
+            // Write to TSV file with one column
+            var outPath = @"E:\Temp\cidEnergys.tsv";
+            using (StreamWriter writer = new StreamWriter(outPath)) 
+            { writer.WriteLine("CID"); // Header
+            foreach (var value in cidEnergys) { 
+                    writer.WriteLine(value); 
+                } }
+        }
+
+        [Test]
+        public static void Mod()
+        {
+            var allmods = ModificationConverter.AllKnownMods;
+            var substitutionMods = ModificationConverter.AllKnownMods.Where(m => m.ModificationType.Contains("substitution")).ToList();
         }
     }
 }
