@@ -16,6 +16,7 @@ using Proteomics;
 using System.Globalization;
 using UsefulProteomicsDatabases;
 using MzLibUtil;
+using TopDownProteomics;
 
 
 namespace Test
@@ -33,14 +34,16 @@ namespace Test
             var allProteins = ProteinDbLoader.LoadProteinFasta(fastaDb, true, DecoyType.None, false, out List<string> errors);
             var psmPath = @"E:\Aneuploidy\DDA\071525\RtPredictionResults\fasta\Task1-SearchTask\AllPeptides.psmtsv";
             var allPeptides = SpectrumMatchTsvReader.ReadPsmTsv(psmPath, out List<string> _).Where(p => p.DecoyContamTarget == "T" && p.QValue <= 0.01).ToList();
+            //var allPeptidesNoModFull = allPeptides.Where(p => !p.FullSequence.Contains("[") && p.Description == "full").ToList();
             var allPeptidesNoModFull = allPeptides.Where(p => !p.FullSequence.Contains("[") && p.Description == "full").ToList();
 
             Random rand = new Random(42);
-            int numberOfPeptideSeqToMutate = 1000;
+            int numberOfPeptideSeqToMutate = 100;
             int[] randomIndices = Enumerable.Range(0, allPeptidesNoModFull.Count).OrderBy(_ => rand.Next()).Take(numberOfPeptideSeqToMutate).ToArray();
             var randomPeptides = randomIndices.Select(i => allPeptidesNoModFull[i]).ToList();
 
             var modifiedProteins = new List<Protein>();
+            var modifiedSequences = new List<string>();
             foreach (var peptide in randomPeptides)
             {
                 var mutatedSequence = RandomlyMutateAminoAcid(peptide.FullSequence);
@@ -58,19 +61,55 @@ namespace Test
                     allProteins.Remove(protein);
                     allProteins.Add(modifiedProtein);
                     modifiedProteins.Add(modifiedProtein);
+                    modifiedSequences.Add(mutatedSequence);
                     if (newProteinSequence.Length != protein.BaseSequence.Length || newProteinSequence == protein.BaseSequence)
                     {
                         int stop = 0;
                     }
                 }
             }
-            var outPath = @"E:\Aneuploidy\DDA\071525\RtPredictionResults\modifiedYeastFasta1000.fasta";
+            modifiedSequences = modifiedSequences.Distinct().ToList();
+            var origSequence = randomPeptides.Select(p => p.BaseSequence).ToList();
+            var outPath = @"E:\Aneuploidy\DDA\071525\RtPredictionResults\modifiedYeastFasta100.fasta";
+            ProteinDbWriter.WriteFastaDatabase(allProteins, outPath, " ");
+        }
+
+        [Test]
+        public static void WriteNewFastaOnePep()
+        {
+            var xmlDb = @"E:\Aneuploidy\uniprotkb_taxonomy_id_559292_AND_review_2024_08_16.xml";
+            var fastaDb = @"E:\Aneuploidy\uniprotkb_taxonomy_id_559292_AND_review_2024_10_02.fasta";
+            //var allProteins = ProteinDbLoader.LoadProteinXML(fastaDb, true, DecoyType.None, null, false,
+            //    new List<string>(), out Dictionary<string, Modification> un);
+            var allProteins = ProteinDbLoader.LoadProteinFasta(fastaDb, true, DecoyType.None, false, out List<string> errors);
+            var psmPath = @"E:\Aneuploidy\DDA\071525\RtPredictionResults\fasta\Task1-SearchTask\AllPeptides.psmtsv";
+            var allPeptides = SpectrumMatchTsvReader.ReadPsmTsv(psmPath, out List<string> _).Where(p => p.DecoyContamTarget == "T" && p.QValue <= 0.01).ToList();
+            var peptide = allPeptides[0];
+
+            var mutatedSequence = RandomlyMutateAminoAcid(peptide.FullSequence);
+            var proteins = allProteins.Where(p => p.BaseSequence.Contains(peptide.BaseSeq)).ToList();
+            foreach (var protein in proteins)
+            {
+                int index = protein.BaseSequence.IndexOf(peptide.FullSequence);
+                string newProteinSequence = null;
+                if (index >= 0)
+                {
+                    newProteinSequence = protein.BaseSequence.Substring(0, index) + mutatedSequence + protein.BaseSequence.Substring(index + mutatedSequence.Length);
+                }
+                var modifiedProtein = new Protein(protein, newProteinSequence);
+                allProteins.Remove(protein);
+                allProteins.Add(modifiedProtein);
+                if (newProteinSequence.Length != protein.BaseSequence.Length || newProteinSequence == protein.BaseSequence)
+                {
+                    int stop = 0;
+                }
+            }
+            var outPath = @"E:\Aneuploidy\DDA\071525\RtPredictionResults\modifiedYeastFastaOnePeptide.fasta";
             ProteinDbWriter.WriteFastaDatabase(allProteins, outPath, " ");
         }
 
         public static string RandomlyMutateAminoAcid(string sequence)
         {
-            const string aminoAcids = "ADEFGHILNPQSTVWY"; // no C, M, K and R
             var subModsPath = @"E:\GitClones\mzLib\mzLib\Omics\Modifications\substitutions.txt";
             var subMods = PtmListLoader.ReadModsFromFile(subModsPath, out var errorMods).Where(m => m.ModificationType == "1 nucleotide substitution").ToList();
             var subDic = new Dictionary<char, List<char>>();
@@ -86,15 +125,17 @@ namespace Test
             var rand = new Random(42);
             int pos = rand.Next(sequence.Length);
             char originalAA = sequence[pos];
-            while (!subDic.ContainsKey(originalAA) || originalAA == 'C' || originalAA == 'M' || originalAA == 'K' || originalAA == 'R')
+            char newAA = originalAA;
+            var doNotTouchAAs = new List<char> { 'C', 'M', 'K', 'R' };
+            while (originalAA == newAA || doNotTouchAAs.Contains(newAA) || doNotTouchAAs.Contains(newAA))
             {
                 pos = rand.Next(sequence.Length);
                 originalAA = sequence[pos];
+                var allMutants = subDic[originalAA];
+                newAA = allMutants[rand.Next(allMutants.Count)];
             }
-            var allMutants = subDic[originalAA];
-            char newAmino = allMutants[rand.Next(allMutants.Count)];
             char[] arr = sequence.ToCharArray();
-            arr[pos] = newAmino;
+            arr[pos] = newAA;
             return new string(arr);
         }
 
@@ -128,7 +169,7 @@ namespace Test
             int numberOfPeptideSeqToMutate = 100;
             int[] randomIndices = Enumerable.Range(0, allPeptidesNoModFull.Count).OrderBy(_ => rand.Next()).Take(numberOfPeptideSeqToMutate).ToArray();
 
-            var allGptmdPeptidePath = @"E:\Aneuploidy\DDA\071525\RtPredictionResults\2025-08-08-10-13-58\Task2-SearchTask\AllPSMs.psmtsv";
+            var allGptmdPeptidePath = @"E:\Aneuploidy\DDA\071525\RtPredictionResults\NicGPTMD\Task2-SearchTask\AllPSMs.psmtsv";
             var allGptmdPeptides = SpectrumMatchTsvReader.ReadPsmTsv(allGptmdPeptidePath, out List<string> _).ToList();//.Where(p => p.DecoyContamTarget == "T" && p.QValue <= 0.01)
             var subResults = new List<SubResult>();
             foreach (var index in randomIndices)
