@@ -1042,9 +1042,11 @@ namespace Test.DatabaseTests
         public static void ProteinQuant()
         {
             var allProteinFilePath = @"E:\Islets\Brian_data\2025-12-15-13-04-35\Task1-SearchTask\AllQuantifiedProteinGroups.tsv";
-            var proteinFile = FileReader.ReadQuantifiableResultFile(allProteinFilePath);
-            proteinFile.LoadResults();
-            var proteinResults = proteinFile.GetQuantifiableResults();
+            //var proteinFile = FileReader.ReadQuantifiableResultFile(allProteinFilePath);
+            //proteinFile.LoadResults();
+            //var proteinResults = proteinFile.GetQuantifiableResults();
+            var tmtProteinFile = FileReader.ReadResultFile(allProteinFilePath);
+            tmtProteinFile.LoadResults();
         }
     }
 }
