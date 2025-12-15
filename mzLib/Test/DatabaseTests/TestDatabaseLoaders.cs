@@ -17,6 +17,7 @@
 
 using Chemistry;
 using MassSpectrometry;
+using Microsoft.VisualStudio.TestPlatform.CommunicationUtilities.Resources;
 using MzLibUtil;
 using NUnit.Framework;
 using NUnit.Framework.Legacy;
@@ -24,6 +25,7 @@ using Omics;
 using Omics.BioPolymer;
 using Omics.Modifications;
 using Proteomics;
+using Readers;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -1013,6 +1015,36 @@ namespace Test.DatabaseTests
             readInDecoyCount = readInWithDecoyGeneration.Count(p => p.IsDecoy);
             Assert.That(readInTargetCount, Is.EqualTo(2));
             Assert.That(readInDecoyCount, Is.EqualTo(2));
+        }
+
+        [Test]
+        public static void tmtLoading()
+        {
+            var tmtPath = @"E:\GitClones\mzLib\mzLib\Readers\Resources\tmt.txt";
+            var modifications = PtmListLoader.ReadModsFromFile(tmtPath, out var errors);
+
+            var cf_string = "C76C{13}7H137N{15}2N23O32";
+            var cf = ChemicalFormula.ParseFormula(cf_string);
+            var dist = IsotopicDistribution.GetDistribution(cf);
+        }
+
+        [Test]
+        public static void RemoveDecoys()
+        {
+            var dbPath = @"E:\Islets\PAW_tests\MM_vs_PAW\2025.01_UP000000589_10090_mouse_canonical_both.fasta";
+            var dbProteins = ProteinDbLoader.LoadProteinFasta(dbPath, true, DecoyType.None, true, out var errors, decoyIdentifier: "REV");
+            var targets = dbProteins.Where(p => !p.IsDecoy).ToList();
+            var outPath = @"E:\Islets\PAW_tests\MM_vs_PAW\filtered_mouse_db_PAW_2.fasta";
+            //ProteinDbWriter.WriteFastaDatabase(targets, outPath, " ");
+        }
+
+        [Test]
+        public static void ProteinQuant()
+        {
+            var allProteinFilePath = @"E:\Islets\Brian_data\2025-12-15-13-04-35\Task1-SearchTask\AllQuantifiedProteinGroups.tsv";
+            var proteinFile = FileReader.ReadQuantifiableResultFile(allProteinFilePath);
+            proteinFile.LoadResults();
+            var proteinResults = proteinFile.GetQuantifiableResults();
         }
     }
 }
