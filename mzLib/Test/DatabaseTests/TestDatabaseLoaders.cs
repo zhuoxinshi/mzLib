@@ -1034,19 +1034,141 @@ namespace Test.DatabaseTests
             var dbPath = @"E:\Islets\PAW_tests\MM_vs_PAW\2025.01_UP000000589_10090_mouse_canonical_both.fasta";
             var dbProteins = ProteinDbLoader.LoadProteinFasta(dbPath, true, DecoyType.None, true, out var errors, decoyIdentifier: "REV");
             var targets = dbProteins.Where(p => !p.IsDecoy).ToList();
+            var accessions = targets.Select(t => t.Accession).Distinct().ToHashSet();
             var outPath = @"E:\Islets\PAW_tests\MM_vs_PAW\filtered_mouse_db_PAW_2.fasta";
-            //ProteinDbWriter.WriteFastaDatabase(targets, outPath, " ");
+            //ProteinDbWriter.WriteFastaDatabase(targets, outPath,"");
+
+            var filteredDb = @"E:\Islets\PAW_tests\MM_vs_PAW\filtered_mouse_db_PAW.fasta";
+            var filteredProteins = ProteinDbLoader.LoadProteinFasta(filteredDb, true, DecoyType.None, false, out var errors2);
         }
 
         [Test]
         public static void ProteinQuant()
         {
-            var allProteinFilePath = @"E:\Islets\Brian_data\2025-12-15-13-04-35\Task1-SearchTask\AllQuantifiedProteinGroups.tsv";
-            //var proteinFile = FileReader.ReadQuantifiableResultFile(allProteinFilePath);
-            //proteinFile.LoadResults();
-            //var proteinResults = proteinFile.GetQuantifiableResults();
-            var tmtProteinFile = FileReader.ReadResultFile(allProteinFilePath);
+            var allProteinFilePath = @"E:\Islets\PAW_tests\MM_vs_PAW\cc_data\GPTMD-deamidation_search_HCD_10ppm-0.2Da-1missMono\Task2-SearchTask\AllQuantifiedProteinGroups.tsv";
+            var tmtProteinFile = new TmtProteinResultFile(allProteinFilePath);
             tmtProteinFile.LoadResults();
+
+            //Get all PSMs from one set
+            string sharedPath = @"E:\Islets\PAW_tests\MM_vs_PAW\cc_data\GPTMD-deamidation_search_HCD_10ppm-0.2Da-1missMono\Task2-SearchTask\Individual File Results";
+            var fileList_set3 = Directory.GetFiles(sharedPath, "*set3*_PSMs.psmtsv", SearchOption.TopDirectoryOnly);
+            var allPsms_set3 = new List<SpectrumMatchFromTsv>();
+            foreach (var file in fileList_set3)
+            {
+                var psmFromTsvFile = new SpectrumMatchFromTsvFile(file);
+                psmFromTsvFile.LoadResults();
+                allPsms_set3.AddRange(psmFromTsvFile.Results.Where(psm => psm.QValue <= 0.01 && psm.IsDecoy == false));
+            }
+
+            //aggregate PSMs for each protein in tmtProteinFile
+            var output_set3 = @"E:\Islets\PAW_tests\MM_vs_PAW\cc_data\GPTMD-deamidation_search_HCD_10ppm-0.2Da-1missMono\Task2-SearchTask\set3_TMTquantProteins.tsv";
+            var tmtProteins = new List<TmtProteinResult>();
+            foreach (var protein in tmtProteinFile.Results.Where(p => p.ProteinQValue <= 0.01 && p.TargetDecoy == "T" && p.NumUniquePeptides >= 2))
+            {
+                var psms = allPsms_set3.Where(p => p.Accession == protein.Accession && protein.UniquePeptideList.Contains(p.BaseSeq));
+                foreach (var psm in psms)
+                {
+                    protein.UpdateReporterIntensities(psm);
+                }
+                tmtProteins.Add(protein);
+            }
+            var tmtQuantFile_set3 = new TmtProteinResultFile(output_set3);
+            tmtQuantFile_set3.Results = tmtProteins;
+            tmtQuantFile_set3.WriteResults(output_set3);
+        }
+
+        [Test]
+        public static void TestQuantBySet()
+        {
+            var allProteinFilePath = @"E:\Islets\PAW_tests\MM_vs_PAW\cc_data\set3_HCD_10ppm-0.98Da-1Da_0.2Da\Task2-SearchTask\AllQuantifiedProteinGroups.tsv";
+            var tmtProteinFile = new TmtProteinResultFile(allProteinFilePath);
+            tmtProteinFile.LoadResults();
+
+            var allPsms = @"E:\Islets\PAW_tests\MM_vs_PAW\cc_data\set3_HCD_10ppm-0.98Da-1Da_0.2Da\Task2-SearchTask\AllPSMs.psmtsv";
+            var psmFromTsvFile = new PsmFromTsvFile(allPsms);
+            psmFromTsvFile.LoadResults();
+            var allPsms_set3 = psmFromTsvFile.Results.Where(psm => psm.QValue <= 0.01 && psm.IsDecoy == false);
+
+            var tmtProteins = new List<TmtProteinResult>();
+            foreach (var protein in tmtProteinFile.Results.Where(p => p.ProteinQValue <= 0.01 && p.TargetDecoy == "T" && p.NumUniquePeptides >= 2))
+            {
+                var psms = allPsms_set3.Where(p => p.Accession == protein.Accession && protein.UniquePeptideList.Contains(p.BaseSeq));
+                foreach (var psm in psms)
+                {
+                    protein.UpdateReporterIntensities(psm);
+                }
+                tmtProteins.Add(protein);
+            }
+
+            var output_set3 = @"E:\Islets\PAW_tests\MM_vs_PAW\cc_data\set3_HCD_10ppm-0.98Da-1Da_0.2Da\Task2-SearchTask\TMTquantProteins.tsv";
+            var tmtQuantFile_set3 = new TmtProteinResultFile(output_set3);
+            tmtQuantFile_set3.Results = tmtProteins;
+            tmtQuantFile_set3.WriteResults(output_set3);
+        }
+
+        [Test]
+        public static void TestParsingComet()
+        {
+            var psmFolder = @"E:\Islets\PAW_tests\MM_vs_PAW\cc_data\MS3_search_10ppm-0.6Da\Task1-SearchTask\Individual File Results";
+            var tmtSets = new List<string> { "set3", "set4", "set5" };
+
+            foreach(var set in tmtSets)
+            {
+                var psmFiles = Directory.GetFiles(psmFolder, $"*{set}*_PSMs.psmtsv", SearchOption.TopDirectoryOnly);
+                foreach(var psmFile in psmFiles)
+                {
+                    var psmFromTsvFile = new PsmFromTsvFile(psmFile);
+                    psmFromTsvFile.LoadResults();
+                    var cometResults = new List<CometPsm>();
+                    foreach (var psm in psmFromTsvFile.Results.Where(p => p.AmbiguityLevel == "1"))
+                    {
+                        cometResults.Add(CometPsm.ConvertPsmTsvToCometPsm(psm));
+                    }
+                    var outPath = Path.Combine(psmFolder, Path.GetFileName(psmFile));
+                    outPath = outPath.Replace(".psmtsv", ".txt");
+                    var cometFile = new CometPsmFile(outPath);
+                    cometFile.Results = cometResults;
+                    cometFile.WriteResults(outPath);
+                }
+            }
+        }
+
+        [Test]
+        public static void TestFdrReanalysis()
+        {
+            var psmFolder = @"E:\Islets\PAW_tests\MM_vs_PAW\cc_data\GPTMD-deamidation_search_HCD_10ppm-0.2Da-1missMono\Task2-SearchTask\Individual File Results";
+            var psmFiles = Directory.GetFiles(psmFolder, $"*set*_PSMs.psmtsv", SearchOption.TopDirectoryOnly);
+
+            var allPsms = new List<PsmFromTsv>();
+            var PsmCounts = new List<(string, int)>();
+            foreach(var file in psmFiles)
+            {
+                var psmFromTsvFile = new PsmFromTsvFile(file);
+                psmFromTsvFile.LoadResults();
+                allPsms.AddRange(psmFromTsvFile.Results);
+                PsmCounts.Add((Path.GetFileName(file), psmFromTsvFile.Results.Where(p => p.QValue <= 0.01).Count()));
+            }
+
+            TmtProteinResult.FdrReanalysis(allPsms);
+            var filteredPsms = allPsms.Where(p => p.PAW_qvalue <= 0.01).ToList();
+            var groupedByFiles = filteredPsms.GroupBy(p => p.FileName).ToList();
+            var psmCounts = groupedByFiles.Select(g => new { FileName = g.Key, PsmCount = g.Count() }).ToList();
+
+            int stop = 0;
+        }
+
+        [Test]
+        public static void CaliedFileReading()
+        {
+            var path = @"E:\Islets\Brian_data\branch_cali-13chann_firstWorked\Task1-CalibrateTask\11-24-25_SPS-TMT_Sam13chan_3uL-calib.mzML";
+            var file = MsDataFileReader.GetDataFile(path);
+            var scans = file.GetAllScansList();
+            var ms3Scans = scans.Where(s => s.MsnOrder == 3).ToList();
+
+            var path2 = @"E:\Islets\Brian_data\11-24-25_SPS-TMT_Sam13chan_3uL.raw";
+            var file2 = MsDataFileReader.GetDataFile(path2);
+            var scans2 = file2.GetAllScansList();
+            var ms3Scans2 = scans2.Where(s => s.MsnOrder == 3).ToList();
         }
     }
 }

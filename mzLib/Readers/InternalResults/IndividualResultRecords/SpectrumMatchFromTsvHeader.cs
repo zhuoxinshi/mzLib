@@ -120,5 +120,18 @@
         // Oligo
         public const string FivePrimeTerminus = "5'-Terminus";
         public const string ThreePrimeTerminus = "3'-Terminus";
+
+        //TMT
+        public const string Chann126 = "126";
+        public const string Chann127N = "127N";
+        public const string Chann127C = "127C";
+        public const string Chann128N = "128N";
+        public const string Chann128C = "128C";
+        public const string Chann129N = "129N";
+        public const string Chann129C = "129C";
+        public const string Chann130N = "130N";
+        public const string Chann130C = "130C";
+        public const string Chann131N = "131N";
+        public const string Chann131C = "131C";
     }
 }

@@ -8,6 +8,7 @@ using Omics.SpectrumMatch;
 using System.Collections.Generic;
 using MzLibUtil;
 using Omics.Modifications;
+using CsvHelper.Configuration.Attributes;
 
 namespace Readers
 {
@@ -63,6 +64,25 @@ namespace Readers
         public double? OneOverK0 { get; protected set; }
 
         public List<MatchedFragmentIon> VariantCrossingIons { get; protected set; }
+
+        public double Chann126 { get; set; }
+
+        public double Chann127N { get; set; }
+
+        public double Chann127C { get; set; }
+
+        public double Chann128N { get; set; }
+        public double Chann128C { get; set; }
+
+        public double Chann129N { get; set; }
+
+        public double Chann129C { get; set; }
+
+        public double Chann130N { get; set; }
+      
+        public double Chann130C { get; set; }
+        public double Chann131N { get; set; }
+        public double Chann131C { get; set; }
 
         #region IQuantifiableRecord Properties and Methods
         public string FileName => FileNameWithoutExtension;
@@ -181,6 +201,20 @@ namespace Readers
                 ? null
                 : (double?)double.Parse(spl[parsedHeader[SpectrumMatchFromTsvHeader.SpectralAngle]].Trim(),
                     CultureInfo.InvariantCulture);
+
+            //TMT
+            Chann126 = (parsedHeader.ContainsKey("126")) ? double.Parse(spl[parsedHeader["126"]].Trim(), CultureInfo.InvariantCulture) : 0;
+            Chann127N = (parsedHeader.ContainsKey("127N")) ? double.Parse(spl[parsedHeader["127N"]].Trim(), CultureInfo.InvariantCulture) : 0;
+            Chann127C = (parsedHeader.ContainsKey("127C")) ? double.Parse(spl[parsedHeader["127C"]].Trim(), CultureInfo.InvariantCulture) : 0;
+            Chann128N = (parsedHeader.ContainsKey("128N")) ? double.Parse(spl[parsedHeader["128N"]].Trim(), CultureInfo.InvariantCulture) : 0;
+            Chann128C = (parsedHeader.ContainsKey("128C")) ? double.Parse(spl[parsedHeader["128C"]].Trim(), CultureInfo.InvariantCulture) : 0;
+            Chann129N = (parsedHeader.ContainsKey("129N")) ? double.Parse(spl[parsedHeader["129N"]].Trim(), CultureInfo.InvariantCulture) : 0;
+            Chann129C = (parsedHeader.ContainsKey("129C")) ? double.Parse(spl[parsedHeader["129C"]].Trim(), CultureInfo.InvariantCulture) : 0;
+            Chann130N = (parsedHeader.ContainsKey("130N")) ? double.Parse(spl[parsedHeader["130N"]].Trim(), CultureInfo.InvariantCulture) : 0;
+            Chann130C = (parsedHeader.ContainsKey("130C")) ? double.Parse(spl[parsedHeader["130C"]].Trim(), CultureInfo.InvariantCulture) : 0;
+            Chann131N = (parsedHeader.ContainsKey("131N")) ? double.Parse(spl[parsedHeader["131N"]].Trim(), CultureInfo.InvariantCulture) : 0;
+            Chann131C = (parsedHeader.ContainsKey("131C")) ? double.Parse(spl[parsedHeader["131C"]].Trim(), CultureInfo.InvariantCulture) : 0;
+
             #pragma warning restore CS8601 // Possible null reference assignment.
         }
 

@@ -38,6 +38,8 @@ namespace Readers
         public string UniqueSequence { get; }
         public double? XLTotalScore { get; }
         public string ParentIons { get; }
+        public double PAW_qvalue { get; set; }
+        public bool Oxidation => FullSequence.Contains("Oxidation");
 
         public PsmFromTsv(string line, char[] split, Dictionary<string, int> parsedHeader)
             : base (line, split, parsedHeader)
