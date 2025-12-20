@@ -1031,12 +1031,10 @@ namespace Test.DatabaseTests
         [Test]
         public static void RemoveDecoys()
         {
-            var dbPath = @"E:\Islets\PAW_tests\MM_vs_PAW\2025.01_UP000000589_10090_mouse_canonical_both.fasta";
-            var dbProteins = ProteinDbLoader.LoadProteinFasta(dbPath, true, DecoyType.None, true, out var errors, decoyIdentifier: "REV");
-            var targets = dbProteins.Where(p => !p.IsDecoy).ToList();
-            var accessions = targets.Select(t => t.Accession).Distinct().ToHashSet();
-            var outPath = @"E:\Islets\PAW_tests\MM_vs_PAW\filtered_mouse_db_PAW_2.fasta";
-            //ProteinDbWriter.WriteFastaDatabase(targets, outPath,"");
+            var dbPath = @"E:\Databases\Human_9606.fasta";
+            var dbProteins = ProteinDbLoader.LoadProteinFasta(dbPath, true, DecoyType.Reverse, true, out var errors, decoyIdentifier: "REV");
+            var outPath = @"E:\Databases\Human_9606_decoys.fasta";
+            ProteinDbWriter.WriteFastaDatabase(dbProteins, outPath, " ");
 
             var filteredDb = @"E:\Islets\PAW_tests\MM_vs_PAW\filtered_mouse_db_PAW.fasta";
             var filteredProteins = ProteinDbLoader.LoadProteinFasta(filteredDb, true, DecoyType.None, false, out var errors2);
@@ -1045,36 +1043,44 @@ namespace Test.DatabaseTests
         [Test]
         public static void ProteinQuant()
         {
-            var allProteinFilePath = @"E:\Islets\PAW_tests\MM_vs_PAW\cc_data\GPTMD-deamidation_search_HCD_10ppm-0.2Da-1missMono\Task2-SearchTask\AllQuantifiedProteinGroups.tsv";
+            //load global protein results
+            var allProteinFilePath = @"E:\Islets\Brian_data\Fractionation_test\Sam13TMT-Fractionated\12-18-25 UPLC Frxn\MM_cali-search\Task2-SearchTask\AllQuantifiedProteinGroups.tsv";
             var tmtProteinFile = new TmtProteinResultFile(allProteinFilePath);
             tmtProteinFile.LoadResults();
 
-            //Get all PSMs from one set
-            string sharedPath = @"E:\Islets\PAW_tests\MM_vs_PAW\cc_data\GPTMD-deamidation_search_HCD_10ppm-0.2Da-1missMono\Task2-SearchTask\Individual File Results";
-            var fileList_set3 = Directory.GetFiles(sharedPath, "*set3*_PSMs.psmtsv", SearchOption.TopDirectoryOnly);
-            var allPsms_set3 = new List<SpectrumMatchFromTsv>();
-            foreach (var file in fileList_set3)
+            //Do protein quant for each TMT set
+            var tmtSets = new List<string> { "Sam13TMT" };
+            var individualResultsFolder = @"E:\Islets\Brian_data\Fractionation_test\Sam13TMT-Fractionated\12-18-25 UPLC Frxn\MM_cali-search\Task2-SearchTask\Individual File Results";
+            foreach (var set in tmtSets)
             {
-                var psmFromTsvFile = new SpectrumMatchFromTsvFile(file);
-                psmFromTsvFile.LoadResults();
-                allPsms_set3.AddRange(psmFromTsvFile.Results.Where(psm => psm.QValue <= 0.01 && psm.IsDecoy == false));
-            }
-
-            //aggregate PSMs for each protein in tmtProteinFile
-            var output_set3 = @"E:\Islets\PAW_tests\MM_vs_PAW\cc_data\GPTMD-deamidation_search_HCD_10ppm-0.2Da-1missMono\Task2-SearchTask\set3_TMTquantProteins.tsv";
-            var tmtProteins = new List<TmtProteinResult>();
-            foreach (var protein in tmtProteinFile.Results.Where(p => p.ProteinQValue <= 0.01 && p.TargetDecoy == "T" && p.NumUniquePeptides >= 2))
-            {
-                var psms = allPsms_set3.Where(p => p.Accession == protein.Accession && protein.UniquePeptideList.Contains(p.BaseSeq));
-                foreach (var psm in psms)
+                //Get PSMs from all fractions
+                var fileList = Directory.GetFiles(individualResultsFolder, "*Sam13TMT*_PSMs.psmtsv", SearchOption.TopDirectoryOnly);
+                var allPsms = new List<SpectrumMatchFromTsv>();
+                foreach (var file in fileList)
                 {
-                    protein.UpdateReporterIntensities(psm);
+                    var psmFromTsvFile = new SpectrumMatchFromTsvFile(file);
+                    psmFromTsvFile.LoadResults();
+                    allPsms.AddRange(psmFromTsvFile.Results.Where(psm => psm.QValue <= 0.01 && psm.DecoyContamTarget == "T"));
                 }
-                tmtProteins.Add(protein);
+
+                //aggregate PSMs for each protein in tmtProteinFile
+                var outputPath = Path.Combine(individualResultsFolder, $"{set}_TMT_ProteinQuant.tsv");
+                var tmtProteins = new List<TmtProteinResult>();
+                foreach (var protein in tmtProteinFile.Results.Where(p => p.ProteinQValue <= 0.01 && p.TargetDecoy == "T" && p.NumUniquePeptides >= 2))
+                {
+                    var psms = allPsms.Where(p => p.Accession == protein.Accession && protein.UniquePeptideList.Contains(p.BaseSeq));
+                    foreach (var psm in psms)
+                    {
+                        protein.UpdateReporterIntensities(psm);
+                    }
+                    tmtProteins.Add(protein);
+                }
+                var tmtQuantFile_set3 = new TmtProteinResultFile();
+                tmtQuantFile_set3.Results = tmtProteins;
+                tmtQuantFile_set3.WriteResults(outputPath);
             }
-            var tmtQuantFile_set3 = new TmtProteinResultFile(output_set3);
-            tmtQuantFile_set3.Results = tmtProteins;
-            tmtQuantFile_set3.WriteResults(output_set3);
+            string sharedPath = @"E:\Islets\Brian_data\Fractionation_test\Sam13TMT-Fractionated\12-18-25 UPLC Frxn\MM_cali-search\Task2-SearchTask\Individual File Results";
+            
         }
 
         [Test]
@@ -1158,17 +1164,19 @@ namespace Test.DatabaseTests
         }
 
         [Test]
-        public static void CaliedFileReading()
+        public static void MassError()
         {
-            var path = @"E:\Islets\Brian_data\branch_cali-13chann_firstWorked\Task1-CalibrateTask\11-24-25_SPS-TMT_Sam13chan_3uL-calib.mzML";
-            var file = MsDataFileReader.GetDataFile(path);
-            var scans = file.GetAllScansList();
-            var ms3Scans = scans.Where(s => s.MsnOrder == 3).ToList();
+            var psmFolder = @"E:\Islets\Brian_data\Fractionation_test\Sam13TMT-Fractionated\12-18-25 UPLC Frxn\MM_search\Task1-SearchTask\Individual File Results";
+            var psmFiles = Directory.GetFiles(psmFolder, $"*Sam13TMT*_PSMs.psmtsv", SearchOption.TopDirectoryOnly);
 
-            var path2 = @"E:\Islets\Brian_data\11-24-25_SPS-TMT_Sam13chan_3uL.raw";
-            var file2 = MsDataFileReader.GetDataFile(path2);
-            var scans2 = file2.GetAllScansList();
-            var ms3Scans2 = scans2.Where(s => s.MsnOrder == 3).ToList();
+            foreach (var psmFile in psmFiles)
+            {
+                var psmFromTsvFile = new PsmFromTsvFile(psmFile);
+                psmFromTsvFile.LoadResults();
+                var filteredPsms = psmFromTsvFile.Results.Where(p => p.QValue <= 0.01 && p.DecoyContamTarget == "T" && p.Notch == "0").ToList();
+                var precursorErrors = filteredPsms.Select(p => p.MassDiffPpm).ToList();
+                var fragmentErrors = filteredPsms.SelectMany(p => p.MatchedIons).Select(i => i.MassErrorDa).ToList();
+            }
         }
     }
 }
