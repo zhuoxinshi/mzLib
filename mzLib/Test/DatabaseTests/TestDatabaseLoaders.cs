@@ -1208,12 +1208,12 @@ namespace Test.DatabaseTests
         [Test]
         public static void SnipFasta()
         {
-            var fullDbPath = @"E:\Islets\PAW_pipeline\PAW_tests\MM_vs_PAW\filtered_mouse_db_PAW.fasta";
+            var fullDbPath = @"E:\Islets\PAW_pipeline\PAW_tests\MM_vs_PAW\2025.01_UP000000589_10090_mouse_canonical_both.fasta";
             var psmFile = @"E:\Islets\PAW_pipeline\PAW_tests\MM_vs_PAW\cc_data\GPTMD-deamidation_search_HCD_10ppm-0.2Da-1missMono\Task2-SearchTask\Individual File Results\z02091_MDP_liver_fusion_tmt8_cc_set3_01_Peptides.psmtsv";
             var psmFromTsvFile = new PsmFromTsvFile(psmFile);
             psmFromTsvFile.LoadResults();
-            var filteredPsms = psmFromTsvFile.Results.Where(p => p.QValue <= 0.01 && p.DecoyContamTarget == "T" && p.Ms2ScanNumber >= 17990 && p.Ms2ScanNumber <= 18262).ToList();
-            var accessions = filteredPsms.Select(p => p.Accession).Distinct().ToHashSet();
+            var filteredPsms = psmFromTsvFile.Results.Where(p => p.QValue <= 0.01 && p.DecoyContamTarget == "T" && p.Ms2ScanNumber >= 30407 && p.Ms2ScanNumber <= 30800).ToList();
+            var accessions = filteredPsms.Select(p => p.Accession.Split(" ")[0]).ToHashSet();
             var proteins = ProteinDbLoader.LoadProteinFasta(fullDbPath, true, DecoyType.None, false, out var errors);
             var proteinsToKeep = proteins.Where(p => accessions.Contains(p.Accession)).ToList();
             var outFastaPath = fullDbPath.Replace(".fasta", "_snip.fasta");
@@ -1223,13 +1223,13 @@ namespace Test.DatabaseTests
         [Test]
         public static void SnipMzMlForMzMLFile()
         {
-            string origDataFile = @"E:\Islets\PAW_pipeline\PAW_tests\MM_vs_PAW\z02091_MDP_liver_fusion_tmt8_cc_set3_01.mzML";
+            string origDataFile = @"E:\Islets\Brian_data\First_data\11-24-25_SPS-TMT_Sam13chan_3uL.mzML";
             //FilteringParams filter = new FilteringParams(200, 0.01, 1, null, false, false, true);
             var reader = MsDataFileReader.GetDataFile(origDataFile);
 
             var scans = reader.GetAllScansList();
-            int startScan = 17990;
-            int endScan = 18262;
+            int startScan = 30407;
+            int endScan = 30800;
             var scansToKeep = scans.Where(x => x.OneBasedScanNumber >= startScan && x.OneBasedScanNumber <= endScan).ToList();
 
             List<(int oneBasedScanNumber, int? oneBasedPrecursorScanNumber)> scanNumbers = new List<(int oneBasedScanNumber, int? oneBasedPrecursorScanNumber)>();
@@ -1306,5 +1306,6 @@ namespace Test.DatabaseTests
 
             MzmlMethods.CreateAndWriteMyMzmlWithCalibratedSpectra(new GenericMsDataFile(scansForTheNewFile.ToArray(), sourceFile), outPath, false);
         }
+
     }
 }
