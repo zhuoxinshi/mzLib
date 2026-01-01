@@ -264,6 +264,13 @@ namespace Readers
             parsedHeader.Add(SpectrumMatchFromTsvHeader.Chann130C, Array.IndexOf(spl, SpectrumMatchFromTsvHeader.Chann130C));
             parsedHeader.Add(SpectrumMatchFromTsvHeader.Chann131N, Array.IndexOf(spl, SpectrumMatchFromTsvHeader.Chann131N));
             parsedHeader.Add(SpectrumMatchFromTsvHeader.Chann131C, Array.IndexOf(spl, SpectrumMatchFromTsvHeader.Chann131C));
+            parsedHeader.Add(SpectrumMatchFromTsvHeader.Chann132N, Array.IndexOf(spl, SpectrumMatchFromTsvHeader.Chann132N));
+            parsedHeader.Add(SpectrumMatchFromTsvHeader.Chann132C, Array.IndexOf(spl, SpectrumMatchFromTsvHeader.Chann132C));
+            parsedHeader.Add(SpectrumMatchFromTsvHeader.Chann133N, Array.IndexOf(spl, SpectrumMatchFromTsvHeader.Chann133N));
+            parsedHeader.Add(SpectrumMatchFromTsvHeader.Chann133C, Array.IndexOf(spl, SpectrumMatchFromTsvHeader.Chann133C));
+            parsedHeader.Add(SpectrumMatchFromTsvHeader.Chann134N, Array.IndexOf(spl, SpectrumMatchFromTsvHeader.Chann134N));
+            parsedHeader.Add(SpectrumMatchFromTsvHeader.Chann134C, Array.IndexOf(spl, SpectrumMatchFromTsvHeader.Chann134C));
+            parsedHeader.Add(SpectrumMatchFromTsvHeader.Chann135N, Array.IndexOf(spl, SpectrumMatchFromTsvHeader.Chann135N));
 
             return parsedHeader;
         }

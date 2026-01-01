@@ -133,5 +133,12 @@
         public const string Chann130C = "130C";
         public const string Chann131N = "131N";
         public const string Chann131C = "131C";
+        public const string Chann132N = "132N";
+        public const string Chann132C = "132C";
+        public const string Chann133N = "133N";
+        public const string Chann133C = "133C";
+        public const string Chann134N = "134N";
+        public const string Chann134C = "134C";
+        public const string Chann135N = "135N";
     }
 }

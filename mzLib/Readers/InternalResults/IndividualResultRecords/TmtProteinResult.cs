@@ -145,6 +145,28 @@ namespace Readers
         [Optional]
         [Name("131C")]
         public double Chann131C { get; set; }
+        [Optional]
+        [Name("132N")]
+        public double Chann132N { get; set; }
+        [Optional]
+        [Name("132C")]
+        public double Chann132C { get; set; }
+        [Optional]
+        [Name("133N")]
+        public double Chann133N { get; set; }
+        [Optional]
+        [Name("133C")]
+        public double Chann133C { get; set; }
+        [Optional]
+        [Name("134N")]
+        public double Chann134N { get; set; }
+        [Optional]
+        [Name("134C")]
+        public double Chann134C { get; set; }
+        [Optional]
+        [Name("135N")]
+        public double Chann135N { get; set; }
+
         [Ignore]
         public List<string> UniquePeptideList => UniquePeptides.Split('|').ToList();
         public TmtProteinResult() { }
@@ -162,6 +184,13 @@ namespace Readers
             Chann130C += psm.Chann130C;
             Chann131N += psm.Chann131N;
             Chann131C += psm.Chann131C;
+            Chann132C += psm.Chann132C;
+            Chann132N += psm.Chann132N;
+            Chann133C += psm.Chann133C;
+            Chann133N += psm.Chann133N;
+            Chann134C += psm.Chann134C;
+            Chann134N += psm.Chann134N;
+            Chann135N += psm.Chann135N;
         }
 
         public static void FdrReanalysis(List<PsmFromTsv> psmTsvs)
@@ -216,5 +245,10 @@ namespace Readers
 
         public override SupportedFileType FileType { get; }
         public override Software Software { get; set; }
+
+        public void NormalizeSampleLoading(TmtProteinResultFile rawProteinFile)
+        {
+
+        }
     }
 }

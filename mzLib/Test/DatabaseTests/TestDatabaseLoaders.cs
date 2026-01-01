@@ -30,6 +30,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Windows.Controls;
 using UsefulProteomicsDatabases;
 using Assert = NUnit.Framework.Legacy.ClassicAssert;
 using Stopwatch = System.Diagnostics.Stopwatch;
@@ -1031,8 +1032,8 @@ namespace Test.DatabaseTests
         [Test]
         public static void RemoveDecoys()
         {
-            var dbPath = @"E:\Databases\Human_9606.fasta";
-            var dbProteins = ProteinDbLoader.LoadProteinFasta(dbPath, true, DecoyType.Reverse, true, out var errors, decoyIdentifier: "REV");
+            var dbPath = @"B:\Projects\Attie_B6islets_drug_TMT\TMT testing\human_UP000005640_reviewed.fasta";
+            var dbProteins = ProteinDbLoader.LoadProteinFasta(dbPath, true, DecoyType.None, true, out var errors);
             var outPath = @"E:\Databases\Human_9606_decoys.fasta";
             ProteinDbWriter.WriteFastaDatabase(dbProteins, outPath, " ");
 
@@ -1041,16 +1042,17 @@ namespace Test.DatabaseTests
         }
 
         [Test]
-        public static void ProteinQuant()
+        public static void ProteinQuantWithIndividualResults()
         {
             //load global protein results
-            var allProteinFilePath = @"E:\Islets\Brian_data\Fractionation_test\Sam13TMT-Fractionated\12-18-25 UPLC Frxn\MM_cali-search\Task2-SearchTask\AllQuantifiedProteinGroups.tsv";
+            var allProteinFilePath = @"E:\Islets\Brian_data\Fractionation_test\Sam13TMT-Fractionated\12-18-25_UPLC_Frxn\MM_noContam-search-cali-search\Task3-SearchTask\AllQuantifiedProteinGroups.tsv";
             var tmtProteinFile = new TmtProteinResultFile(allProteinFilePath);
             tmtProteinFile.LoadResults();
 
             //Do protein quant for each TMT set
             var tmtSets = new List<string> { "Sam13TMT" };
-            var individualResultsFolder = @"E:\Islets\Brian_data\Fractionation_test\Sam13TMT-Fractionated\12-18-25 UPLC Frxn\MM_cali-search\Task2-SearchTask\Individual File Results";
+            var individualResultsFolder = @"E:\Islets\Brian_data\Fractionation_test\Sam13TMT-Fractionated\12-18-25_UPLC_Frxn\MM_noContam-search-cali-search\Task3-SearchTask\Individual File Results";
+            var parentPath = Path.GetDirectoryName(individualResultsFolder);
             foreach (var set in tmtSets)
             {
                 //Get PSMs from all fractions
@@ -1064,7 +1066,7 @@ namespace Test.DatabaseTests
                 }
 
                 //aggregate PSMs for each protein in tmtProteinFile
-                var outputPath = Path.Combine(individualResultsFolder, $"{set}_TMT_ProteinQuant.tsv");
+                var outputPath = Path.Combine(parentPath, $"{set}_TMT_ProteinQuant.tsv");
                 var tmtProteins = new List<TmtProteinResult>();
                 foreach (var protein in tmtProteinFile.Results.Where(p => p.ProteinQValue <= 0.01 && p.TargetDecoy == "T" && p.NumUniquePeptides >= 2))
                 {
@@ -1075,12 +1077,10 @@ namespace Test.DatabaseTests
                     }
                     tmtProteins.Add(protein);
                 }
-                var tmtQuantFile_set3 = new TmtProteinResultFile();
-                tmtQuantFile_set3.Results = tmtProteins;
-                tmtQuantFile_set3.WriteResults(outputPath);
+                var tmtQuantFile = new TmtProteinResultFile(outputPath);
+                tmtQuantFile.Results = tmtProteins;
+                tmtQuantFile.WriteResults(outputPath);
             }
-            string sharedPath = @"E:\Islets\Brian_data\Fractionation_test\Sam13TMT-Fractionated\12-18-25 UPLC Frxn\MM_cali-search\Task2-SearchTask\Individual File Results";
-            
         }
 
         [Test]
@@ -1166,8 +1166,8 @@ namespace Test.DatabaseTests
         [Test]
         public static void MassError()
         {
-            var psmFolder = @"E:\Islets\Brian_data\Fractionation_test\Sam13TMT-Fractionated\12-18-25 UPLC Frxn\MM_search\Task1-SearchTask\Individual File Results";
-            var psmFiles = Directory.GetFiles(psmFolder, $"*Sam13TMT*_PSMs.psmtsv", SearchOption.TopDirectoryOnly);
+            var psmFolder = @"E:\Islets\Brian_data\Fractionation_test\Sam13TMT-Fractionated\12-18-25_UPLC_Frxn\F2--8_Rapid_vs_Normal\Task1-SearchTask\Individual File Results";
+            var psmFiles = Directory.GetFiles(psmFolder, $"*TMT*_PSMs.psmtsv", SearchOption.TopDirectoryOnly);
 
             foreach (var psmFile in psmFiles)
             {
@@ -1176,6 +1176,32 @@ namespace Test.DatabaseTests
                 var filteredPsms = psmFromTsvFile.Results.Where(p => p.QValue <= 0.01 && p.DecoyContamTarget == "T" && p.Notch == "0").ToList();
                 var precursorErrors = filteredPsms.Select(p => p.MassDiffPpm).ToList();
                 var fragmentErrors = filteredPsms.SelectMany(p => p.MatchedIons).Select(i => i.MassErrorDa).ToList();
+            }
+        }
+
+        [Test]
+        public static void MassError2()
+        {
+            var psmFolder = @"E:\Islets\Brian_data\Fractionation_test\Sam13TMT-Fractionated\12-18-25_UPLC_Frxn\MM_noContam-search-cali-search\Task3-SearchTask\Individual File Results";
+            var psmFiles = Directory.GetFiles(psmFolder, $"*Sam13TMT*_Peptides.psmtsv", SearchOption.TopDirectoryOnly);
+            var filePeptideDict = new Dictionary<string, HashSet<string>>();
+
+            foreach (var psmFile in psmFiles)
+            {
+                var fileName = Path.GetFileNameWithoutExtension(psmFile);
+                var psmFromTsvFile = new PsmFromTsvFile(psmFile);
+                psmFromTsvFile.LoadResults();
+                var filteredPsms = psmFromTsvFile.Results.Where(p => p.QValue <= 0.01 && p.DecoyContamTarget == "T").ToList();
+                var peptideSet = new HashSet<string>(filteredPsms.Select(p => p.BaseSeq));
+                filePeptideDict.Add(fileName, peptideSet);
+            }
+
+            var allPeptides = filePeptideDict.SelectMany(kvp => kvp.Value).ToHashSet();
+            var peptideAppearances = new Dictionary<string, int>();
+            foreach (var peptide in allPeptides)
+            {
+                var appearanceCount = filePeptideDict.Where(kvp => kvp.Value.Contains(peptide)).Select(kvp => kvp.Key).ToList();
+                peptideAppearances.Add(peptide, appearanceCount.Count);
             }
         }
     }
