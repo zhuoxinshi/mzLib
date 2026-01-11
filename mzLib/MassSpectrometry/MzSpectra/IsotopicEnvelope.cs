@@ -133,5 +133,10 @@ namespace MassSpectrometry
                 return hash;
             }
         }
+
+        public void Rescore(double newScore)
+        {
+            Score = newScore;
+        }
     }
 }
