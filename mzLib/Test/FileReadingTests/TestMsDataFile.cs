@@ -168,6 +168,12 @@ namespace Test.FileReadingTests
             theSpectrum.SetIsolationRange(400, 2000);
             Assert.AreEqual(400, theSpectrum.IsolationRange.Minimum);
             Assert.AreEqual(2000, theSpectrum.IsolationRange.Maximum);
+
+            theSpectrum.SetPrecursorInfo(500, 2, 1e6);
+            Assert.AreEqual(500, theSpectrum.SelectedIonMZ);
+            Assert.AreEqual(2, theSpectrum.SelectedIonChargeStateGuess);
+            Assert.AreEqual(1e6, theSpectrum.SelectedIonIntensity);
+
         }
 
         [Test]

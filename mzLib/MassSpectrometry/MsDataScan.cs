@@ -106,7 +106,7 @@ namespace MassSpectrometry
         //MSn properties, all are nullable for MS1s, but MS1s are checked by evaluating if MsnOrder==1
         public double? IsolationMz { get; private set; } // May be adjusted by calibration
 
-        public int? SelectedIonChargeStateGuess { get; }
+        public int? SelectedIonChargeStateGuess { get; private set; }
         public double? SelectedIonIntensity { get; private set; } // May be refined
         public double? SelectedIonMZ { get; private set; } // May be adjusted by calibration
         public DissociationType? DissociationType { get; }
@@ -298,6 +298,13 @@ namespace MassSpectrometry
         public void SetIsolationRange(double min, double max)
         {
             this.isolationRange = new MzRange(min, max);
+        }
+
+        public void SetPrecursorInfo(double selectedMz, int selectedChargeStateGuess, double selectedIonIntensity)
+        {
+            this.SelectedIonMZ = selectedMz;
+            this.SelectedIonChargeStateGuess = selectedChargeStateGuess;
+            this.SelectedIonIntensity = selectedIonIntensity;
         }
 
         private IEnumerable<double> GetNoiseDataMass(double[,] noiseData)
