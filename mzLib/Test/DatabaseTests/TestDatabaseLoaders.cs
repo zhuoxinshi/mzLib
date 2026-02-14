@@ -1166,17 +1166,23 @@ namespace Test.DatabaseTests
         [Test]
         public static void MassError()
         {
-            var psmFolder = @"E:\Islets\Brian_data\Fractionation_test\Sam13TMT-Fractionated\12-18-25_UPLC_Frxn\F2--8_Rapid_vs_Normal\Task1-SearchTask\Individual File Results";
-            var psmFiles = Directory.GetFiles(psmFolder, $"*TMT*_PSMs.psmtsv", SearchOption.TopDirectoryOnly);
+            var psmFolder = @"E:\Aneuploidy\Mistranslation_project\011626\021226_TMT\testMix_MS3-search\Task1-SearchTask\AllPSMs.psmtsv";
+            //var psmFiles = Directory.GetFiles(psmFolder, $"*TMT*_PSMs.psmtsv", SearchOption.TopDirectoryOnly);
 
-            foreach (var psmFile in psmFiles)
-            {
-                var psmFromTsvFile = new PsmFromTsvFile(psmFile);
-                psmFromTsvFile.LoadResults();
-                var filteredPsms = psmFromTsvFile.Results.Where(p => p.QValue <= 0.01 && p.DecoyContamTarget == "T" && p.Notch == "0").ToList();
-                var precursorErrors = filteredPsms.Select(p => p.MassDiffPpm).ToList();
-                var fragmentErrors = filteredPsms.SelectMany(p => p.MatchedIons).Select(i => i.MassErrorDa).ToList();
-            }
+            //foreach (var psmFile in psmFiles)
+            //{
+            //    var psmFromTsvFile = new PsmFromTsvFile(psmFile);
+            //    psmFromTsvFile.LoadResults();
+            //    var filteredPsms = psmFromTsvFile.Results.Where(p => p.QValue <= 0.01 && p.DecoyContamTarget == "T" && p.Notch == "0").ToList();
+            //    var precursorErrors = filteredPsms.Select(p => p.MassDiffPpm).ToList();
+            //    var fragmentErrors = filteredPsms.SelectMany(p => p.MatchedIons).Select(i => i.MassErrorDa).ToList();
+            //}
+
+            var psmPath = @"E:\Aneuploidy\Mistranslation_project\011626\021226_TMT\testMix_MS3-search\Task1-SearchTask\AllPSMs.psmtsv";
+            var psmTsvFile = new PsmFromTsvFile(psmPath);
+            var psms = psmTsvFile.Results.Where(p => p.DecoyContamTarget == "T" && p.Notch == "0").Take(5000).ToList();
+            var precursorErrors = psms.Select(p => p.MassDiffPpm).ToList();
+            var fragmentErrors = psms.SelectMany(p => p.MatchedIons).Select(i => i.MassErrorDa).ToList();
         }
 
         [Test]
