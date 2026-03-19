@@ -90,6 +90,7 @@ namespace Readers
         public double Chann134N { get; set; }
         public double Chann134C { get; set; }
         public double Chann135N { get; set; }
+        public List<double> ReporterIonIntensities { get; set; }
 
         #region IQuantifiableRecord Properties and Methods
         public string FileName => FileNameWithoutExtension;
@@ -210,25 +211,34 @@ namespace Readers
                     CultureInfo.InvariantCulture);
 
             //TMT
-            Chann126 = (parsedHeader.ContainsKey("126")) ? double.Parse(spl[parsedHeader["126"]].Trim(), CultureInfo.InvariantCulture) : 0;
-            Chann127N = (parsedHeader.ContainsKey("127N")) ? double.Parse(spl[parsedHeader["127N"]].Trim(), CultureInfo.InvariantCulture) : 0;
-            Chann127C = (parsedHeader.ContainsKey("127C")) ? double.Parse(spl[parsedHeader["127C"]].Trim(), CultureInfo.InvariantCulture) : 0;
-            Chann128N = (parsedHeader.ContainsKey("128N")) ? double.Parse(spl[parsedHeader["128N"]].Trim(), CultureInfo.InvariantCulture) : 0;
-            Chann128C = (parsedHeader.ContainsKey("128C")) ? double.Parse(spl[parsedHeader["128C"]].Trim(), CultureInfo.InvariantCulture) : 0;
-            Chann129N = (parsedHeader.ContainsKey("129N")) ? double.Parse(spl[parsedHeader["129N"]].Trim(), CultureInfo.InvariantCulture) : 0;
-            Chann129C = (parsedHeader.ContainsKey("129C")) ? double.Parse(spl[parsedHeader["129C"]].Trim(), CultureInfo.InvariantCulture) : 0;
-            Chann130N = (parsedHeader.ContainsKey("130N")) ? double.Parse(spl[parsedHeader["130N"]].Trim(), CultureInfo.InvariantCulture) : 0;
-            Chann130C = (parsedHeader.ContainsKey("130C")) ? double.Parse(spl[parsedHeader["130C"]].Trim(), CultureInfo.InvariantCulture) : 0;
-            Chann131N = (parsedHeader.ContainsKey("131N")) ? double.Parse(spl[parsedHeader["131N"]].Trim(), CultureInfo.InvariantCulture) : 0;
-            Chann131C = (parsedHeader.ContainsKey("131C")) ? double.Parse(spl[parsedHeader["131C"]].Trim(), CultureInfo.InvariantCulture) : 0;
-            Chann132N = (parsedHeader.ContainsKey("132N")) ? double.Parse(spl[parsedHeader["132N"]].Trim(), CultureInfo.InvariantCulture) : 0;
-            Chann132C = (parsedHeader.ContainsKey("132C")) ? double.Parse(spl[parsedHeader["132C"]].Trim(), CultureInfo.InvariantCulture) : 0;
-            Chann133N = (parsedHeader.ContainsKey("133N")) ? double.Parse(spl[parsedHeader["133N"]].Trim(), CultureInfo.InvariantCulture) : 0;
-            Chann133C = (parsedHeader.ContainsKey("133C")) ? double.Parse(spl[parsedHeader["133C"]].Trim(), CultureInfo.InvariantCulture) : 0;
-            Chann134N = (parsedHeader.ContainsKey("134N")) ? double.Parse(spl[parsedHeader["134N"]].Trim(), CultureInfo.InvariantCulture) : 0;
-            Chann134C = (parsedHeader.ContainsKey("134C")) ? double.Parse(spl[parsedHeader["134C"]].Trim(), CultureInfo.InvariantCulture) : 0;
-            Chann135N = (parsedHeader.ContainsKey("135N")) ? double.Parse(spl[parsedHeader["135N"]].Trim(), CultureInfo.InvariantCulture) : 0;
+            //Chann126 = (parsedHeader.ContainsKey("126")) ? double.Parse(spl[parsedHeader["126"]].Trim(), CultureInfo.InvariantCulture) : 0;
+            //Chann127N = (parsedHeader.ContainsKey("127N")) ? double.Parse(spl[parsedHeader["127N"]].Trim(), CultureInfo.InvariantCulture) : 0;
+            //Chann127C = (parsedHeader.ContainsKey("127C")) ? double.Parse(spl[parsedHeader["127C"]].Trim(), CultureInfo.InvariantCulture) : 0;
+            //Chann128N = (parsedHeader.ContainsKey("128N")) ? double.Parse(spl[parsedHeader["128N"]].Trim(), CultureInfo.InvariantCulture) : 0;
+            //Chann128C = (parsedHeader.ContainsKey("128C")) ? double.Parse(spl[parsedHeader["128C"]].Trim(), CultureInfo.InvariantCulture) : 0;
+            //Chann129N = (parsedHeader.ContainsKey("129N")) ? double.Parse(spl[parsedHeader["129N"]].Trim(), CultureInfo.InvariantCulture) : 0;
+            //Chann129C = (parsedHeader.ContainsKey("129C")) ? double.Parse(spl[parsedHeader["129C"]].Trim(), CultureInfo.InvariantCulture) : 0;
+            //Chann130N = (parsedHeader.ContainsKey("130N")) ? double.Parse(spl[parsedHeader["130N"]].Trim(), CultureInfo.InvariantCulture) : 0;
+            //Chann130C = (parsedHeader.ContainsKey("130C")) ? double.Parse(spl[parsedHeader["130C"]].Trim(), CultureInfo.InvariantCulture) : 0;
+            //Chann131N = (parsedHeader.ContainsKey("131N")) ? double.Parse(spl[parsedHeader["131N"]].Trim(), CultureInfo.InvariantCulture) : 0;
+            //Chann131C = (parsedHeader.ContainsKey("131C")) ? double.Parse(spl[parsedHeader["131C"]].Trim(), CultureInfo.InvariantCulture) : 0;
+            //Chann132N = (parsedHeader.ContainsKey("132N")) ? double.Parse(spl[parsedHeader["132N"]].Trim(), CultureInfo.InvariantCulture) : 0;
+            //Chann132C = (parsedHeader.ContainsKey("132C")) ? double.Parse(spl[parsedHeader["132C"]].Trim(), CultureInfo.InvariantCulture) : 0;
+            //Chann133N = (parsedHeader.ContainsKey("133N")) ? double.Parse(spl[parsedHeader["133N"]].Trim(), CultureInfo.InvariantCulture) : 0;
+            //Chann133C = (parsedHeader.ContainsKey("133C")) ? double.Parse(spl[parsedHeader["133C"]].Trim(), CultureInfo.InvariantCulture) : 0;
+            //Chann134N = (parsedHeader.ContainsKey("134N")) ? double.Parse(spl[parsedHeader["134N"]].Trim(), CultureInfo.InvariantCulture) : 0;
+            //Chann134C = (parsedHeader.ContainsKey("134C")) ? double.Parse(spl[parsedHeader["134C"]].Trim(), CultureInfo.InvariantCulture) : 0;
+            //Chann135N = (parsedHeader.ContainsKey("135N")) ? double.Parse(spl[parsedHeader["135N"]].Trim(), CultureInfo.InvariantCulture) : 0;
 
+            ReporterIonIntensities = new List<double>();
+            if (parsedHeader["126"] != -1)
+            {
+                int index = parsedHeader["126"];
+                for (int i = index; i < index + 18; i++)
+                {
+                    ReporterIonIntensities.Add(double.Parse(spl[i].Trim(), CultureInfo.InvariantCulture));
+                }
+            }
 #pragma warning restore CS8601 // Possible null reference assignment.
         }
 

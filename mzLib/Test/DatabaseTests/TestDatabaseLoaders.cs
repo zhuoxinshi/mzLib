@@ -1313,5 +1313,14 @@ namespace Test.DatabaseTests
             MzmlMethods.CreateAndWriteMyMzmlWithCalibratedSpectra(new GenericMsDataFile(scansForTheNewFile.ToArray(), sourceFile), outPath, false);
         }
 
+        [Test]
+        public static void Random()
+        {
+            var proteinPruned = @"E:\Islets\Brian_data\LF_ptm\GptmdDb_search_prunedDb\Task1-SearchTask\uniprotkb_mice_AND_model_organism_10090_2025_10_03GPTMDproteinPruned.xml";
+            var pruned = @"E:\Islets\Brian_data\LF_ptm\GptmdDb_search_prunedDb\Task1-SearchTask\uniprotkb_mice_AND_model_organism_10090_2025_10_03GPTMDpruned.xml";
+
+            var proteinPrunedDb = ProteinDbLoader.LoadProteinXML(proteinPruned, true, DecoyType.None, new List<Modification>(), false, new List<string>(), out var errors);
+            var prunedDb = ProteinDbLoader.LoadProteinXML(pruned, true, DecoyType.None, new List<Modification>(), false, new List<string>(), out var errors2);
+        }
     }
 }
