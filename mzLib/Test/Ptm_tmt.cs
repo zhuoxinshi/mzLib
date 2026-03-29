@@ -15,11 +15,45 @@ using Easy.Common.Extensions;
 using PredictionClients.Koina.AbstractClasses;
 using PredictionClients.Koina.SupportedModels.RetentionTimeModels;
 using static UsefulProteomicsDatabases.ProteinDbRetriever;
+using System.Security.RightsManagement;
 
 namespace Test
 {
     public class Ptm_tmt
     {
+
+        [Test]
+        public static void HighResTMT()
+        {
+            var notInteresting = new List<string> { "TMT18", "Fixed", "Artifact", "Variable", "Metal" };
+
+            var allPeptidesHigh_path = @"E:\Islets\Brian_data\HighResTMT\noCali_LFgptmdFilterPruned\Task1-SearchTask\AllPeptides.psmtsv";
+            var allPeptidesHigh_file = new PsmFromTsvFile(allPeptidesHigh_path);
+            var allPeptidesHigh = allPeptidesHigh_file.Results.Where(p => p.QValue <= 0.01 && p.DecoyContamTarget == "T");
+            var allPeptidesNoModHigh = allPeptidesHigh.Where(p => !SpectrumMatchFromTsv.ParseModifications(p.FullSequence).Values.Any(v => v.Contains("Fixed") || v.Contains("Variable") || v.Contains("TMT")) && !p.FullSequence.Contains("|"));
+            var allPeptidesWithModsHigh = allPeptidesHigh.Where(p => SpectrumMatchFromTsv.ParseModifications(p.FullSequence).Values.Any(v => !notInteresting.Any(key => v.Contains(key))) || p.Description.Contains("chain")).ToList();
+
+            var allPeptidesLow_path = @"E:\Islets\Brian_data\Real_islets\Frxn\All_LFgptmdFilterPrunedDb\Task1-SearchTask\AllPeptides.psmtsv";
+            var allPeptidesLow_file = new PsmFromTsvFile(allPeptidesLow_path);
+            var allPeptidesLow = allPeptidesLow_file.Results.Where(p => p.QValue <= 0.01 && p.DecoyContamTarget == "T");
+            //var allPeptidesWithModsLow = allPeptidesLow.Where(p => SpectrumMatchFromTsv.ParseModifications(p.FullSequence).Values.Any(v => !notInteresting.Any(key => v.Contains(key))) || p.Description.Contains("chain")).ToList();
+
+            var rtPairs = new List<(double high, double low)>();
+            var highResOverlap = new List<PsmFromTsv>();
+            foreach (var peptide in allPeptidesWithModsHigh)
+            {
+                var lowResPeptide = allPeptidesLow.FirstOrDefault(p => p.FullSequence == peptide.FullSequence);
+                if (lowResPeptide != null)
+                {
+                    rtPairs.Add((peptide.RetentionTime, lowResPeptide.RetentionTime));
+                    highResOverlap.Add(lowResPeptide);
+                }
+            }
+
+            var lowResOutPath = @"E:\Islets\Brian_data\Real_islets\Frxn\All_LFgptmdFilterPrunedDb\ModifiedPeptidesTMT_HighResOverlap_BestPsm.tsv";
+            TmtPair.WriteResults(highResOverlap, lowResOutPath);
+        }
+
         [Test]
         public static void TMT_BestPsm()
         {
@@ -116,7 +150,7 @@ namespace Test
             var input_noTMT = allPeptidesTMT_noMod.Select(p => new RetentionTimePredictionInput(TmtPair.RemoveTmtLabels(p.FullSequence))).ToList();
             var predictions_noTMT = model_noTMT.Predict(input_noTMT).Select(p => p.PredictedRetentionTime).ToArray();
 
-            var outPath = @"E:\Islets\Brian_data\Real_islets\Frxn\F2-11_search-cali-search\Task1-SearchTask\TMT_rt_predictions.tsv";
+            var outPath = @"E:\Islets\Brian_data\Real_islets\Frxn\F2-11_search-cali-search\Task1-SearchTask\TMT_deepLC.csv";
             using (StreamWriter writer = new StreamWriter(outPath))
             {
                 writer.WriteLine(string.Join("\t", new List<string> { "PredictedRt_TMT", "PredictedRt_noTMT", "Diff", "ObservedRt"}));
@@ -126,6 +160,129 @@ namespace Test
                     writer.WriteLine(string.Join("\t", new List<string> { predictions[i].ToString(), predictions_noTMT[i].ToString(), (predictions[i] - predictions_noTMT[i]).ToString(), observedRts[i].ToString() }));
                 }
             }
+        }
+
+
+        public static string ModType(string fullSequence)
+        {
+            var mod = "Unmodified";
+            if (!SpectrumMatchFromTsv.ParseModifications(fullSequence).Values.All(v => v.Contains("Fixed") || v.Contains("Variable") || v.Contains("TMT")))
+            {
+                mod = "GptmdMod";
+                if (fullSequence.Contains("Biological") || fullSequence.Contains("Uniprot"))
+                {
+                    mod = "BioMod";
+                    if (fullSequence.IndexOf("Phospho", StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        mod = "Phospho";
+                    }
+                }
+            }
+            return mod;
+        }
+
+        [Test]
+        public static void TestDeepLC()
+        {
+            var notInteresting = new List<string> { "TMT18", "Fixed", "Artifact", "Variable", "Metal" };
+            string allPeptidesTMT_path = @"E:\Islets\Brian_data\Real_islets\Frxn\All_gptmdPrunedDb-second\Task1-SearchTask\AllPeptides.psmtsv";
+            var allPeptidesTMT_file = new PsmFromTsvFile(allPeptidesTMT_path);
+            var allPeptidesTMT = allPeptidesTMT_file.Results.Where(p => p.QValue <= 0.01 && p.DecoyContamTarget == "T" && p.MissedCleavage == "0");
+            //var allPeptidesTMTWithMods = allPeptidesTMT.Where(p => SpectrumMatchFromTsv.ParseModifications(p.FullSequence).Values.Any(v => !notInteresting.Any(key => v.Contains(key))));
+            var highScoreNoMod = allPeptidesTMT.Where(p => ModType(p.FullSequence) =="Unmodified" && p.Score >= 20);
+
+            var outPath = @"E:\Islets\Brian_data\Real_islets\Frxn\All_gptmdPrunedDb-second\DeepLC_highScoreNoMod_input.csv";
+            using (StreamWriter writer = new StreamWriter(outPath))
+            {
+                writer.WriteLine(string.Join(",", new List<string> { "seq", "modifications", "ObservedRt", "ModType" }));
+                foreach (var peptide in highScoreNoMod)
+                {
+                    var parsedMods = ParseModsForDeepLC(peptide.FullSequence, peptide.BaseSeq);
+                    var modType = ModType(peptide.FullSequence);
+                    writer.WriteLine(string.Join(",", new List<string> { peptide.BaseSeq, parsedMods, Math.Round(peptide.RetentionTime, 2).ToString(), modType }));
+                }
+            }
+        }
+
+        public static string ParseModsForDeepLC(string fullSequence, string baseSequence)
+        {
+            var mods = SpectrumMatchFromTsv.ParseModifications(fullSequence);
+            if (mods.Count == 0) return "";
+            var sb = new StringBuilder();
+            foreach (var mod in mods)
+            {
+                var modName = mod.Value.Split(':')[1].Split(' ')[0];
+                var parsedModName = ParseModNameForDeepLC(modName);
+                var modPosition = mod.Key;
+                //if (modPosition == baseSequence.Length)
+                //{
+                //    modPosition = -1; 
+                //}
+                sb.Append($"{modPosition}|{parsedModName}|");
+            }
+            return sb.ToString().TrimEnd('|');
+        }
+
+
+        public static string ParseModNameForDeepLC(string modName)
+        {
+            if (modName.Contains("TMT18"))
+            {
+                return "TMTpro";
+            }
+            else if (modName.Contains("Carbamidomethyl"))
+            {
+                return "Carbamidomethyl";
+            }
+            else if (modName.IndexOf("Phospho", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return "Phospho";
+            }
+            else if (modName.IndexOf("Hydroxy", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return "Hydroxylation";
+            }
+            else if (modName.IndexOf("Acetyl", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return "Acetyl";
+            }
+            else if (modName.IndexOf("Phospho", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return "Methyl";
+            }
+            else if (modName.Contains("Citrullination"))
+            {
+                return "Deamidated";
+            }
+            else if (modName.IndexOf("Sodium", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return "Sodiated";
+            }
+            else if (modName.IndexOf("Methyla", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return "Methyl";
+            }
+            else if (modName.IndexOf("Succinyl", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return "Succinyl";
+            }
+            return modName;
+        }
+
+        [Test]
+        public static void TestParsingDeepLC()
+        {
+            string fullSeq = "[Multiplex Label:TMT18 on X]GQAGPEGAAP[Common Biological:Hydroxylation on P]APEEDK[Multiplex Label:TMT18 on K]";
+            var parsed = ParseModsForDeepLC(fullSeq, "GQAGPEGAAPAPEEDK");
+        }
+
+        [Test]
+        public static void Random()
+        {
+            var path = @"E:\Aneuploidy\Mistranslation_project\011626\030726_LF\good_runs\2026-03-28-11-32-02\Task1-SearchTask\AllPeptides.psmtsv";
+            var peptides = new PsmFromTsvFile(path).Results.Where(p => p.QValue <= 0.01 && p.DecoyContamTarget == "T").ToList();
+            var peptidesWithC = peptides.Where(p => p.BaseSeq.Contains("C")).ToList();
+            var peptidesWithFixed = peptidesWithC.Where(p => p.BaseSeq.Count(b => b == 'C') == SpectrumMatchFromTsv.ParseModifications(p.FullSequence).Values.Count(v => v.Contains("Fixed"))).ToList();
         }
     }
 
