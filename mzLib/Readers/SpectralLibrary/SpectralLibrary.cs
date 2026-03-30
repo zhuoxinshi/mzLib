@@ -50,7 +50,8 @@ namespace Readers.SpectralLibrary
         private static Dictionary<string, string> PrositToMetaMorpheusModDictionary = new Dictionary<string, string>
         {
             { "Oxidation","[Common Variable:Oxidation on M]" },
-            { "Carbamidomethyl", "[Common Fixed:Carbamidomethyl on C]" }
+            { "Carbamidomethyl", "[Common Fixed:Carbamidomethyl on C]" },
+            {"TMTpro", "[Multiplex Label:TMT18 on X]"},
         };
 
         private static Dictionary<string, string> pDeepToMetaMorpheusModDictionary = new Dictionary<string, string>
@@ -554,28 +555,50 @@ namespace Readers.SpectralLibrary
                                 string modString = split[i];
 
                                 string[] modInfo = modString.Split(',');
+
                                 int modPosition = int.Parse(modInfo[0]);
                                 string modName = modInfo[2];
                                 string modNameNoBrackets = modName;
 
-                                if (modName.StartsWith('['))
+                                //TMT
+                                if (modName == "TMTpro")
                                 {
-                                    modNameNoBrackets = modName.Substring(1, modName.Length - 2);
-                                }
-
-                                if (!ModificationConverter.AllKnownMods.Select(m => m.IdWithMotif).Contains(modNameNoBrackets))
-                                {
-                                    if (PrositToMetaMorpheusModDictionary.TryGetValue(modName, out var metaMorpheusMod))
+                                    if (modPosition == 0)
                                     {
-                                        modName = metaMorpheusMod;
+                                        modName = "[Multiplex Label:TMT18 on X]";
+                                    }
+                                    else if (modInfo[1] == "K")
+                                    {
+                                        modName = "[Multiplex Label:TMT18 on K]";
+                                    }
+                                } 
+                                else
+                                {
+                                    if (modName.StartsWith('['))
+                                    {
+                                        modNameNoBrackets = modName.Substring(1, modName.Length - 2);
+                                    }
+
+                                    if (!ModificationConverter.AllKnownMods.Select(m => m.IdWithMotif).Contains(modNameNoBrackets))
+                                    {
+                                        if (PrositToMetaMorpheusModDictionary.TryGetValue(modName, out var metaMorpheusMod))
+                                        {
+                                            modName = metaMorpheusMod;
+                                        }
                                     }
                                 }
 
                                 // add the mod name into the sequence
-                                string leftSeq = sequence.Substring(0, modPosition);
-                                string rightSeq = sequence.Substring(modPosition);
-
-                                sequence = leftSeq + modName + rightSeq;
+                                if (modPosition == 0)
+                                {
+                                    sequence = modName + sequence;
+                                } 
+                                else
+                                {
+                                    string leftSeq = sequence.Substring(0, modPosition);
+                                    string rightSeq = sequence.Substring(modPosition);
+                                    sequence = leftSeq + modName + rightSeq;
+                                }
                             }
                         }
                     }
