@@ -16,6 +16,7 @@ using PredictionClients.Koina.AbstractClasses;
 using PredictionClients.Koina.SupportedModels.RetentionTimeModels;
 using static UsefulProteomicsDatabases.ProteinDbRetriever;
 using System.Security.RightsManagement;
+using PredictionClients.Koina.SupportedModels.FlyabilityModels;
 
 namespace Test
 {
@@ -182,6 +183,13 @@ namespace Test
         }
 
         [Test]
+        public static void TestMs2PIP()
+        {
+            string fullSeq = "[Multiplex Label:TMT18 on X]GQAGPEGAAP[Common Biological:Hydroxylation on P]APEEDK[Multiplex Label:TMT18 on K]";
+            var parsed = ParseSequenceForMs2PIP(fullSeq);
+        }
+
+        [Test]
         public static void TestDeepLC()
         {
             var notInteresting = new List<string> { "TMT18", "Fixed", "Artifact", "Variable", "Metal" };
@@ -204,7 +212,7 @@ namespace Test
             }
         }
 
-        public static string ParseModsForDeepLC(string fullSequence, string baseSequence)
+        public static string ParseModsForDeepLC(string fullSequence, string baseSequence = null)
         {
             var mods = SpectrumMatchFromTsv.ParseModifications(fullSequence);
             if (mods.Count == 0) return "";
@@ -213,6 +221,7 @@ namespace Test
             {
                 var modName = mod.Value.Split(':')[1].Split(' ')[0];
                 var parsedModName = ParseModNameForDeepLC(modName);
+                if (parsedModName == null) return null;
                 var modPosition = mod.Key;
                 //if (modPosition == baseSequence.Length)
                 //{
@@ -223,57 +232,82 @@ namespace Test
             return sb.ToString().TrimEnd('|');
         }
 
+        public static string ParseSequenceForMs2PIP(string fullSequence )
+        {
+            var sb = new StringBuilder();
+            var mods = SpectrumMatchFromTsv.ParseModifications(fullSequence);
+            for (int i = 0; i < fullSequence.Length; i++)
+            {
+                char c = fullSequence[i];
+                sb.Append(c);
+                if (mods.ContainsKey(i))
+                {
+                    var modName = mods[i].Split(':')[1].Split(' ')[0];
+                    var parsedModName = ParseModNameForDeepLC(modName);
+                    sb.Append($"[{parsedModName}]");
+                }
+            }
+            return sb.ToString();
+        }
+
 
         public static string ParseModNameForDeepLC(string modName)
         {
-            if (modName.Contains("TMT18"))
+            // C#
+            switch (modName)
             {
-                return "TMTpro";
+                case string s when s.Contains("TMT18"):
+                    return "TMTpro";
+                case string s when s.Contains("Carbamidomethyl"):
+                    return "Carbamidomethyl";
+                case string s when s.IndexOf("Phospho", StringComparison.OrdinalIgnoreCase) >= 0:
+                    return "Phospho";
+                case string s when s.IndexOf("Hydroxy", StringComparison.OrdinalIgnoreCase) >= 0:
+                    return "Hydroxylation";
+                case string s when s.IndexOf("Acetyl", StringComparison.OrdinalIgnoreCase) >= 0:
+                    return "Acetyl";
+                case string s when s.Contains("Citrullination"):
+                    return "Deamidated";
+                case string s when s.IndexOf("Sodium", StringComparison.OrdinalIgnoreCase) >= 0:
+                    return "Sodiated";
+                case string s when s.IndexOf("Methyl", StringComparison.OrdinalIgnoreCase) >= 0 && s.Contains("-"):
+                    return "Methyl";
+                case string s when s.IndexOf("dimethyl", StringComparison.OrdinalIgnoreCase) >= 0:
+                    return "Dimethyl";
+                case string s when s.IndexOf("trimethyl", StringComparison.OrdinalIgnoreCase) >= 0:
+                    return "Trimethyl";
+                case string s when s.IndexOf("Succinyl", StringComparison.OrdinalIgnoreCase) >= 0:
+                    return "Succinyl";
+                default:
+                    return null;
             }
-            else if (modName.Contains("Carbamidomethyl"))
-            {
-                return "Carbamidomethyl";
-            }
-            else if (modName.IndexOf("Phospho", StringComparison.OrdinalIgnoreCase) >= 0)
-            {
-                return "Phospho";
-            }
-            else if (modName.IndexOf("Hydroxy", StringComparison.OrdinalIgnoreCase) >= 0)
-            {
-                return "Hydroxylation";
-            }
-            else if (modName.IndexOf("Acetyl", StringComparison.OrdinalIgnoreCase) >= 0)
-            {
-                return "Acetyl";
-            }
-            else if (modName.IndexOf("Phospho", StringComparison.OrdinalIgnoreCase) >= 0)
-            {
-                return "Methyl";
-            }
-            else if (modName.Contains("Citrullination"))
-            {
-                return "Deamidated";
-            }
-            else if (modName.IndexOf("Sodium", StringComparison.OrdinalIgnoreCase) >= 0)
-            {
-                return "Sodiated";
-            }
-            else if (modName.IndexOf("Methyla", StringComparison.OrdinalIgnoreCase) >= 0)
-            {
-                return "Methyl";
-            }
-            else if (modName.IndexOf("Succinyl", StringComparison.OrdinalIgnoreCase) >= 0)
-            {
-                return "Succinyl";
-            }
-            return modName;
+
         }
 
         [Test]
         public static void TestParsingDeepLC()
         {
-            string fullSeq = "[Multiplex Label:TMT18 on X]GQAGPEGAAP[Common Biological:Hydroxylation on P]APEEDK[Multiplex Label:TMT18 on K]";
-            var parsed = ParseModsForDeepLC(fullSeq, "GQAGPEGAAPAPEEDK");
+            var notInteresting = new List<string> { "TMT18", "Fixed", "Artifact", "Variable", "Metal" };
+
+            var allPeptidesHigh_path = @"E:\Islets\Brian_data\HighResTMT\noCali_LFgptmdFilterPruned\Task1-SearchTask\AllPeptides.psmtsv";
+            var allPeptidesHigh_file = new PsmFromTsvFile(allPeptidesHigh_path);
+            var allPeptidesHigh = allPeptidesHigh_file.Results.Where(p => p.QValue <= 0.01 && p.DecoyContamTarget == "T");
+            var allPeptidesNoModHigh = allPeptidesHigh.Where(p => !SpectrumMatchFromTsv.ParseModifications(p.FullSequence).Values.Any(v => v.Contains("Fixed") || v.Contains("Variable") || v.Contains("TMT")) && !p.FullSequence.Contains("|"));
+            var allPeptidesWithModsHigh = allPeptidesHigh.Where(p => SpectrumMatchFromTsv.ParseModifications(p.FullSequence).Values.Any(v => !notInteresting.Any(key => v.Contains(key))) || p.Description.Contains("chain")).ToList();
+
+            var outPath = @"E:\Islets\Brian_data\HighResTMT\TestMs2PIP\test_batch_input.peprec";
+            using (StreamWriter writer = new StreamWriter(outPath))
+            {
+                writer.WriteLine("spec_id modifications peptide charge" );
+                int i = 0;
+                foreach (var peptide in allPeptidesWithModsHigh)
+                {
+                    var parsedMods = ParseModsForDeepLC(peptide.FullSequence);
+                    if (parsedMods == null) continue;
+                    var outString = new List<string> {i.ToString(), parsedMods, peptide.BaseSeq, peptide.ChargeState.ToString() };
+                    writer.WriteLine(string.Join(" ", outString));
+                }
+            }   
         }
 
         [Test]
