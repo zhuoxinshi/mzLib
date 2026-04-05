@@ -527,6 +527,13 @@ namespace Readers.SpectralLibrary
                         }
                     }
 
+                    //read spectrum identifier 
+                    //int indOfSpecID = Array.IndexOf(split, "SpectrumIdentifier");
+                    //if (indOfSpecID > 0)
+                    //{
+                    //    sequence = sequence + "_" + split[indOfSpecID + 1];
+                    //}
+
                     // get mods
                     // be careful about spaces! mod names can have spaces in them
                     StringBuilder sb = new StringBuilder();
@@ -584,6 +591,10 @@ namespace Readers.SpectralLibrary
                                         if (PrositToMetaMorpheusModDictionary.TryGetValue(modName, out var metaMorpheusMod))
                                         {
                                             modName = metaMorpheusMod;
+                                        }
+                                        else
+                                        {
+                                            continue;
                                         }
                                     }
                                 }
