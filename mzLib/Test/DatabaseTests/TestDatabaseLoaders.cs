@@ -32,6 +32,7 @@ using Omics.Modifications.IO;
 using UsefulProteomicsDatabases;
 using Assert = NUnit.Framework.Legacy.ClassicAssert;
 using Stopwatch = System.Diagnostics.Stopwatch;
+using FlashLFQ;
 
 namespace Test.DatabaseTests
 {
@@ -1155,6 +1156,84 @@ namespace Test.DatabaseTests
             readInDecoyCount = readInWithDecoyGeneration.Count(p => p.IsDecoy);
             Assert.That(readInTargetCount, Is.EqualTo(2));
             Assert.That(readInDecoyCount, Is.EqualTo(2));
+        }
+
+        [Test]
+        public static void FlyDatabase()
+        {
+            var uniprotDb = @"E:\Fly_TMT\uniprotkb_D_melanogaster_AND_reviewed_t_2026_02_11.fasta";
+            var proteins = ProteinDbLoader.LoadProteinFasta(uniprotDb, true, DecoyType.None, true, out var errors);
+            var mutationFile = @"E:\Fly_TMT\variant_aa_positions.txt";
+            var lines = File.ReadAllLines(mutationFile);
+            var mutations = lines.Skip(1).Select(line => new { Accession = line.Split('\t')[1], Position = int.Parse(line.Split('\t')[2]) }).ToList();
+            var groupedMutations = mutations.GroupBy(m => m.Accession); 
+            foreach(var group in groupedMutations)
+            {
+                var protein = proteins.FirstOrDefault(p => p.Accession == group.Key);
+                if (protein == null) continue;
+                var updatedSequence = protein.BaseSequence;
+                foreach(var mutation in group)
+                {
+                    var positions = FindKRSite(updatedSequence, mutation.Position);
+                    var left = positions.Item1 == 0? "" : updatedSequence.Substring(0, positions.Item1 + 1);
+                    var right = positions.Item2 == updatedSequence.Length - 1 ? "" : updatedSequence.Substring(positions.Item2 + 1);
+                    updatedSequence = left + right;
+                }
+                protein.BaseSequence = updatedSequence;
+            }
+
+            var updatedDbPath = @"E:\Fly_TMT\Db_mutationRemoved.fasta";
+            ProteinDbWriter.WriteFastaDatabase(proteins, updatedDbPath, "|");
+        }
+
+        public static (int, int) FindKRSite(string sequence, int mutationPos)
+        {
+            int pos0 = mutationPos - 1;
+
+            int start = 0;
+            for (int i = pos0 - 1; i >= 0; i--)
+            {
+                if (IsKR(sequence, i) || i == 0)
+                {
+                    start = i;
+                    break;
+                }
+            }
+
+            // Find peptide end:
+            // end is at the next valid tryptic cleavage at or after pos0
+            int end = sequence.Length - 1;
+            for (int i = pos0; i < sequence.Length; i++)
+            {
+                if (IsKR(sequence, i) || i == sequence.Length - 1)
+                {
+                    end = i;
+                    break;
+                }
+            }
+
+            return (start, end);
+        }
+
+        private static bool IsKR(string sequence, int i)
+        {
+            // Trypsin cleaves AFTER K or R, unless next residue is P
+            char aa = sequence[i];
+
+            if (aa != 'K' && aa != 'R')
+                return false;
+
+            // If K/R is last residue, cleavage is allowed
+            if (i == sequence.Length - 1)
+                return true;
+
+            return sequence[i + 1] != 'P';
+        }
+
+        [Test]
+        public static void Random()
+        {
+            IBioPolymerWithSetMods bioPolymer = MzLibExtensions.ToBioPolymerWithSetMods();
         }
     }
 }
