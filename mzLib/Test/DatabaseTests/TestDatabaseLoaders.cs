@@ -1163,21 +1163,38 @@ namespace Test.DatabaseTests
         {
             var uniprotDb = @"E:\Fly_TMT\uniprotkb_D_melanogaster_AND_reviewed_t_2026_02_11.fasta";
             var proteins = ProteinDbLoader.LoadProteinFasta(uniprotDb, true, DecoyType.None, true, out var errors);
+            var uniqueAccessions = proteins.Select(p => p.Accession).Distinct().ToList();
             var mutationFile = @"E:\Fly_TMT\variant_aa_positions.txt";
             var lines = File.ReadAllLines(mutationFile);
             var mutations = lines.Skip(1).Select(line => new { Accession = line.Split('\t')[1], Position = int.Parse(line.Split('\t')[2]) }).ToList();
             var groupedMutations = mutations.GroupBy(m => m.Accession); 
             foreach(var group in groupedMutations)
             {
+                //TODO: need update the mutation position when pieces are removed! or remove them together?
                 var protein = proteins.FirstOrDefault(p => p.Accession == group.Key);
                 if (protein == null) continue;
                 var updatedSequence = protein.BaseSequence;
+                var toRemove = new List<string> { };
                 foreach(var mutation in group)
                 {
-                    var positions = FindKRSite(updatedSequence, mutation.Position);
-                    var left = positions.Item1 == 0? "" : updatedSequence.Substring(0, positions.Item1 + 1);
-                    var right = positions.Item2 == updatedSequence.Length - 1 ? "" : updatedSequence.Substring(positions.Item2 + 1);
-                    updatedSequence = left + right;
+                    if (mutation.Position >= protein.Length) continue;
+                    var positions = FindKRSite(protein.BaseSequence, mutation.Position);
+                    var peptide = protein.BaseSequence.Substring(positions.Item1 + 1, positions.Item2 - positions.Item1);
+                    toRemove.Add(peptide);
+                    //var left = positions.Item1 == 0? "" : updatedSequence.Substring(0, positions.Item1 + 1);
+                    //var right = positions.Item2 == updatedSequence.Length - 1 ? "" : updatedSequence.Substring(positions.Item2 + 1);
+                    //updatedSequence = left + right;
+                }
+                foreach(var peptide in toRemove.Distinct())
+                {
+                    try
+                    {
+                        updatedSequence = updatedSequence.Replace(peptide, "");
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Error removing peptide {peptide} from protein {protein.Accession}: {ex.Message}");
+                    }
                 }
                 protein.BaseSequence = updatedSequence;
             }
@@ -1205,7 +1222,7 @@ namespace Test.DatabaseTests
             int end = sequence.Length - 1;
             for (int i = pos0; i < sequence.Length; i++)
             {
-                if (IsKR(sequence, i) || i == sequence.Length - 1)
+                if (i == sequence.Length - 1 || IsKR(sequence, i))
                 {
                     end = i;
                     break;
@@ -1228,12 +1245,6 @@ namespace Test.DatabaseTests
                 return true;
 
             return sequence[i + 1] != 'P';
-        }
-
-        [Test]
-        public static void Random()
-        {
-            IBioPolymerWithSetMods bioPolymer = MzLibExtensions.ToBioPolymerWithSetMods();
         }
     }
 }
