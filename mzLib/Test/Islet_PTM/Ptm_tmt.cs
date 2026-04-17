@@ -14,6 +14,7 @@ using System.Windows.Shapes;
 using Easy.Common.Extensions;
 using PredictionClients.Koina.AbstractClasses;
 using PredictionClients.Koina.SupportedModels.RetentionTimeModels;
+using TopDownProteomics;
 
 namespace Test
 {
@@ -353,7 +354,29 @@ namespace Test
                 }
             }
         }
+
+        [Test]
+        public static void TIC()
+        {
+            var fileLists = new List<string> { @"E:\Aneuploidy\Mistranslation_project\011626\040326_IS_test\04-10-26_YL.raw",
+                @"E:\Aneuploidy\Mistranslation_project\011626\040326_IS_test\04-14-26_std-YL.raw",
+                @"E:\Aneuploidy\Mistranslation_project\011626\040326_IS_test\04-13-26_1611-Q-R6_SP.raw",
+                @"E:\Aneuploidy\Mistranslation_project\011626\040326_IS_test\04-14-26_1612-Q-R6_SP.raw",
+                @"E:\Aneuploidy\Mistranslation_project\011626\040326_IS_test\04-14-26_1611-LOG-R6_SP.raw",
+            @"E:\Aneuploidy\Mistranslation_project\011626\040326_IS_test\04-14-26_1612-LOG-R6_SP.raw",
+            @"E:\Aneuploidy\Mistranslation_project\011626\040326_IS_test\04-14-26_1613-Q-R6_SP.raw",
+            @"E:\Aneuploidy\Mistranslation_project\011626\040326_IS_test\04-14-26_1614-Q-R6_SP.raw",
+            @"E:\Aneuploidy\Mistranslation_project\011626\040326_IS_test\04-14-26_1614-LOG-R6_SP.raw"};
+            var ticAreas = new Dictionary<string, string>();
+            foreach (var file in fileLists)
+            {
+                var dataFile = MsDataFileReader.GetDataFile(file);
+                var ms1TicArea = dataFile.GetMS1Scans().Where(s => s.RetentionTime >= 15 && s.RetentionTime <= 75).Sum(s => s.TotalIonCurrent);
+                ticAreas[file] = $"{ms1TicArea:E2}";
+            }
+        }
     }
+
 
     public class TmtPair
     {
