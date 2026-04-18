@@ -1164,7 +1164,7 @@ namespace Test.DatabaseTests
             var uniprotDb = @"E:\Fly_TMT\uniprotkb_D_melanogaster_AND_reviewed_t_2026_02_11.fasta";
             var proteins = ProteinDbLoader.LoadProteinFasta(uniprotDb, true, DecoyType.None, true, out var errors);
             var uniqueAccessions = proteins.Select(p => p.Accession).Distinct().ToList();
-            var mutationFile = @"E:\Fly_TMT\variant_aa_positions.txt";
+            var mutationFile = @"E:\Fly_TMT\variant_aa_positions_uniprot_comprehensive_no_stop.txt";
             var lines = File.ReadAllLines(mutationFile);
             var mutations = lines.Skip(1).Select(line => new { Accession = line.Split('\t')[1], Position = int.Parse(line.Split('\t')[2]) }).ToList();
             var groupedMutations = mutations.GroupBy(m => m.Accession); 
@@ -1203,6 +1203,18 @@ namespace Test.DatabaseTests
             ProteinDbWriter.WriteFastaDatabase(proteins, updatedDbPath, "|");
         }
 
+
+        [Test]
+        public static void FlyDatabase2()
+        {
+            var uniprotDb = @"E:\Fly_TMT\uniprot_dmel_comprehensive.fasta";
+            var proteins = ProteinDbLoader.LoadProteinFasta(uniprotDb, true, DecoyType.None, true, out var errors);
+            var updatedDbPath = @"E:\Fly_TMT\Db_mutationRemoved.fasta";
+            var updatedProteins = ProteinDbLoader.LoadProteinFasta(updatedDbPath, true, DecoyType.Reverse, true, out var errors2, decoyIdentifier: "REV");
+            var updated_decoys = updatedProteins.Where(p => p.IsDecoy).ToList();
+            var updatedDbPath_rev = @"E:\Fly_TMT\Db_mutationRemoved_rev.fasta";
+            ProteinDbWriter.WriteFastaDatabase(updatedProteins, updatedDbPath_rev, " ");
+        }
         public static (int, int) FindKRSite(string sequence, int mutationPos)
         {
             int pos0 = mutationPos - 1;
