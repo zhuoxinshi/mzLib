@@ -367,11 +367,13 @@ namespace Test
             @"E:\Aneuploidy\Mistranslation_project\011626\040326_IS_test\04-14-26_1613-Q-R6_SP.raw",
             @"E:\Aneuploidy\Mistranslation_project\011626\040326_IS_test\04-14-26_1614-Q-R6_SP.raw",
             @"E:\Aneuploidy\Mistranslation_project\011626\040326_IS_test\04-14-26_1614-LOG-R6_SP.raw"};
+            var fileLists2 = new List<string> { @"E:\Aneuploidy\Mistranslation_project\011626\040326_IS_test\04-16-26_TMT_mix.raw" ,
+            @"E:\Aneuploidy\Mistranslation_project\011626\040326_IS_test\04-17-26_YL_TMT.raw"};
             var ticAreas = new Dictionary<string, string>();
-            foreach (var file in fileLists)
+            foreach (var file in fileLists2)
             {
                 var dataFile = MsDataFileReader.GetDataFile(file);
-                var ms1TicArea = dataFile.GetMS1Scans().Where(s => s.RetentionTime >= 15 && s.RetentionTime <= 75).Sum(s => s.TotalIonCurrent);
+                var ms1TicArea = dataFile.GetMS1Scans().Where(s => s.RetentionTime >= 30 && s.RetentionTime <= 120).Sum(s => s.TotalIonCurrent);
                 ticAreas[file] = $"{ms1TicArea:E2}";
             }
         }
