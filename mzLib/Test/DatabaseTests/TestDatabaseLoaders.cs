@@ -1161,7 +1161,7 @@ namespace Test.DatabaseTests
         [Test]
         public static void FlyDatabase()
         {
-            var uniprotDb = @"E:\Fly_TMT\uniprotkb_D_melanogaster_AND_reviewed_t_2026_02_11.fasta";
+            var uniprotDb = @"E:\Fly_TMT\reviewedAndPruned2.fasta";
             var proteins = ProteinDbLoader.LoadProteinFasta(uniprotDb, true, DecoyType.None, true, out var errors);
             var uniqueAccessions = proteins.Select(p => p.Accession).Distinct().ToList();
             var mutationFile = @"E:\Fly_TMT\variant_aa_positions_uniprot_comprehensive_no_stop.txt";
@@ -1199,7 +1199,7 @@ namespace Test.DatabaseTests
                 protein.BaseSequence = updatedSequence;
             }
 
-            var updatedDbPath = @"E:\Fly_TMT\Db_mutationRemoved.fasta";
+            var updatedDbPath = @"E:\Fly_TMT\reviewedAndPruned2_mutationRemoved.fasta";
             ProteinDbWriter.WriteFastaDatabase(proteins, updatedDbPath, "|");
         }
 
@@ -1209,12 +1209,51 @@ namespace Test.DatabaseTests
         {
             var uniprotDb = @"E:\Fly_TMT\uniprot_dmel_comprehensive.fasta";
             var proteins = ProteinDbLoader.LoadProteinFasta(uniprotDb, true, DecoyType.None, true, out var errors);
+            var distinctSequences = proteins.Select(p => p.BaseSequence).Distinct().ToList();
             var updatedDbPath = @"E:\Fly_TMT\Db_mutationRemoved.fasta";
             var updatedProteins = ProteinDbLoader.LoadProteinFasta(updatedDbPath, true, DecoyType.Reverse, true, out var errors2, decoyIdentifier: "REV");
             var updated_decoys = updatedProteins.Where(p => p.IsDecoy).ToList();
             var updatedDbPath_rev = @"E:\Fly_TMT\Db_mutationRemoved_rev.fasta";
             ProteinDbWriter.WriteFastaDatabase(updatedProteins, updatedDbPath_rev, " ");
         }
+
+        [Test]
+        public static void FlyPrunedDb()
+        {
+            var allDb = @"E:\Fly_TMT\uniprot_dmel_comprehensive.fasta";
+            var allProteins = ProteinDbLoader.LoadProteinFasta(allDb, true, DecoyType.None, true, out var errors);
+            var reviewed = @"E:\Fly_TMT\uniprotkb_D_melanogaster_AND_reviewed_t_2026_02_11.fasta";
+            var reviewedProteins = ProteinDbLoader.LoadProteinFasta(reviewed, true, DecoyType.None, true, out var errors2);
+            var unreviewedProteins = allProteins.Where(p => !reviewedProteins.Select(rp => rp.BaseSequence).Contains(p.BaseSequence)).ToList();   
+            var prunedDb = @"E:\Fly_TMT\MM_largeDb_search-cali-search\Task1-SearchTask\uniprot_dmel_comprehensiveproteinPruned.xml";
+            var prunedProteins = ProteinDbLoader.LoadProteinXML(prunedDb, true, DecoyType.None, new List<Modification>(), false, new List<string>(), out var errors3);
+            var reviewedAndPruned = reviewedProteins.Concat(prunedProteins).DistinctBy(p => p.BaseSequence).ToList();
+            var unreviewedPrunedProteins = prunedProteins.Where(p => !reviewedProteins.Select(rp => rp.BaseSequence).Contains(p.BaseSequence)).ToList();
+            var reviewedAndPrunedPath = @"E:\Fly_TMT\reviewedAndPruned2.fasta";
+            ProteinDbWriter.WriteFastaDatabase(reviewedAndPruned, reviewedAndPrunedPath, "");
+        }
+
+        [Test]
+        public static void FlyPrunedDb2()
+        {
+            var reviewedAndPrunedPath = @"E:\Fly_TMT\Databases\reviewedAndPruned.fasta";
+            var proteins = ProteinDbLoader.LoadProteinFasta(reviewedAndPrunedPath, true, DecoyType.None, true, out var errors);
+            var contaminantDb = @"E:\GitClones\MetaMorpheus\MetaMorpheus\GUI\bin\Debug\net8.0-windows\Contaminants\MetaMorpheusContaminants.xml";
+            var contaminants = ProteinDbLoader.LoadProteinXML(contaminantDb, true, DecoyType.None, new List<Modification>(), false, new List<string>(), out var errors3); 
+            var proteinsAndContaminants = proteins.Concat(contaminants).ToList();
+            var proteinsAndContaminantsPath = @"E:\Fly_TMT\reviewedAndPruned2_mutationRemoved_plusMMContaminants.fasta";
+            ProteinDbWriter.WriteFastaDatabase(proteinsAndContaminants, proteinsAndContaminantsPath, "");
+        }
+
+        [Test]
+        public static void FlyPrunedDb3()
+        {
+            var proteinsAndContaminantsPath = @"E:\Fly_TMT\reviewedAndPruned2_mutationRemoved_plusMMContaminants.fasta";
+            var proteins = ProteinDbLoader.LoadProteinFasta(proteinsAndContaminantsPath, true, DecoyType.Reverse, true, out var errors, decoyIdentifier: "REV");
+            var proteinsAndContaminantsAndREVPath = @"E:\Fly_TMT\reviewedAndPruned2_mutationRemoved_plusMMContaminants_REV_Uniprot.fasta";
+            ProteinDbWriter.WriteFastaDatabase(proteins, proteinsAndContaminantsAndREVPath, "");
+        }
+
         public static (int, int) FindKRSite(string sequence, int mutationPos)
         {
             int pos0 = mutationPos - 1;
