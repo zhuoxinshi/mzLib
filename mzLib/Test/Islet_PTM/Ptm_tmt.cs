@@ -358,22 +358,17 @@ namespace Test
         [Test]
         public static void TIC()
         {
-            var fileLists = new List<string> { @"E:\Aneuploidy\Mistranslation_project\011626\040326_IS_test\04-10-26_YL.raw",
-                @"E:\Aneuploidy\Mistranslation_project\011626\040326_IS_test\04-14-26_std-YL.raw",
-                @"E:\Aneuploidy\Mistranslation_project\011626\040326_IS_test\04-13-26_1611-Q-R6_SP.raw",
-                @"E:\Aneuploidy\Mistranslation_project\011626\040326_IS_test\04-14-26_1612-Q-R6_SP.raw",
-                @"E:\Aneuploidy\Mistranslation_project\011626\040326_IS_test\04-14-26_1611-LOG-R6_SP.raw",
-            @"E:\Aneuploidy\Mistranslation_project\011626\040326_IS_test\04-14-26_1612-LOG-R6_SP.raw",
-            @"E:\Aneuploidy\Mistranslation_project\011626\040326_IS_test\04-14-26_1613-Q-R6_SP.raw",
-            @"E:\Aneuploidy\Mistranslation_project\011626\040326_IS_test\04-14-26_1614-Q-R6_SP.raw",
-            @"E:\Aneuploidy\Mistranslation_project\011626\040326_IS_test\04-14-26_1614-LOG-R6_SP.raw"};
+            var directory = @"E:\Aneuploidy\Mistranslation_project\011626\040326_IS_test\";
+            var files = Directory.GetFiles(directory, "*04-18*");
+            var files2 = Directory.GetFiles(directory, "*04-19*");
+            var fileList3 = files.Concat(files2).ToList();
             var fileLists2 = new List<string> { @"E:\Aneuploidy\Mistranslation_project\011626\040326_IS_test\04-16-26_TMT_mix.raw" ,
             @"E:\Aneuploidy\Mistranslation_project\011626\040326_IS_test\04-17-26_YL_TMT.raw"};
             var ticAreas = new Dictionary<string, string>();
-            foreach (var file in fileLists2)
+            foreach (var file in fileList3)
             {
                 var dataFile = MsDataFileReader.GetDataFile(file);
-                var ms1TicArea = dataFile.GetMS1Scans().Where(s => s.RetentionTime >= 30 && s.RetentionTime <= 120).Sum(s => s.TotalIonCurrent);
+                var ms1TicArea = dataFile.GetMS1Scans().Where(s => s.RetentionTime >= 15 && s.RetentionTime <= 110).Sum(s => s.TotalIonCurrent);
                 ticAreas[file] = $"{ms1TicArea:E2}";
             }
         }
