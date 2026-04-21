@@ -33,6 +33,8 @@ using UsefulProteomicsDatabases;
 using Assert = NUnit.Framework.Legacy.ClassicAssert;
 using Stopwatch = System.Diagnostics.Stopwatch;
 using FlashLFQ;
+using Readers;
+using Proteomics.ProteolyticDigestion;
 
 namespace Test.DatabaseTests
 {
@@ -1161,18 +1163,19 @@ namespace Test.DatabaseTests
         [Test]
         public static void FlyDatabase()
         {
-            var uniprotDb = @"E:\Fly_TMT\reviewedAndPruned2.fasta";
+            var uniprotDb = @"E:\Fly_TMT\MyEmail\041926_update\reviewedAndPruned_plusMMContaminants.fasta";
             var proteins = ProteinDbLoader.LoadProteinFasta(uniprotDb, true, DecoyType.None, true, out var errors);
             var uniqueAccessions = proteins.Select(p => p.Accession).Distinct().ToList();
-            var mutationFile = @"E:\Fly_TMT\variant_aa_positions_uniprot_comprehensive_no_stop.txt";
+            var mutationFile = @"E:\Fly_TMT\Databases\variant_aa_positions_uniprot_comprehensive_no_stop.txt";
             var lines = File.ReadAllLines(mutationFile);
             var mutations = lines.Skip(1).Select(line => new { Accession = line.Split('\t')[1], Position = int.Parse(line.Split('\t')[2]) }).ToList();
-            var groupedMutations = mutations.GroupBy(m => m.Accession); 
+            var groupedMutations = mutations.GroupBy(m => m.Accession).Where(g => g.Key == "Q9VDN2"); 
             foreach(var group in groupedMutations)
             {
                 //TODO: need update the mutation position when pieces are removed! or remove them together?
                 var protein = proteins.FirstOrDefault(p => p.Accession == group.Key);
                 if (protein == null) continue;
+                var peptides = protein.Digest(new DigestionParams(maxMissedCleavages: 0), null, null);
                 var updatedSequence = protein.BaseSequence;
                 var toRemove = new List<string> { };
                 foreach(var mutation in group)
@@ -1200,6 +1203,34 @@ namespace Test.DatabaseTests
             }
 
             var updatedDbPath = @"E:\Fly_TMT\reviewedAndPruned2_mutationRemoved.fasta";
+            ProteinDbWriter.WriteFastaDatabase(proteins, updatedDbPath, "|");
+        }
+
+        [Test]
+        public static void FlyDatabase_new()
+        {
+            var uniprotDb = @"E:\Fly_TMT\MyEmail\041926_update\reviewedAndPruned_plusMMContaminants.fasta";
+            var proteins = ProteinDbLoader.LoadProteinFasta(uniprotDb, true, DecoyType.None, true, out var errors);
+            var uniqueAccessions = proteins.Select(p => p.Accession).Distinct().ToList();
+            var mutationFile = @"E:\Fly_TMT\Databases\variant_aa_positions_uniprot_comprehensive_no_stop.txt";
+            var lines = File.ReadAllLines(mutationFile);
+            var mutations = lines.Skip(1).Select(line => new { Accession = line.Split('\t')[1], Position = int.Parse(line.Split('\t')[2]) }).ToList();
+            var groupedMutations = mutations.GroupBy(m => m.Accession);
+            foreach (var group in groupedMutations)
+            {
+                var protein = proteins.FirstOrDefault(p => p.Accession == group.Key);
+                if (protein == null) continue;
+                var peptides = protein.Digest(new DigestionParams(maxMissedCleavages: 0, initiatorMethionineBehavior: InitiatorMethionineBehavior.Retain), null, null);
+                var updatedSequence = protein.BaseSequence;
+                var toRemove = peptides.Where(p => group.Any(m => m.Position >= p.OneBasedStartResidue && m.Position <= p.OneBasedEndResidue)).Select(p => p.BaseSequence).ToList();
+                foreach (var peptide in toRemove.Distinct())
+                {
+                    updatedSequence = updatedSequence.Replace(peptide, "");
+                }
+                protein.BaseSequence = updatedSequence;
+            }
+
+            var updatedDbPath = @"E:\Fly_TMT\Databases\reviewedAndPruned_plusMMContaminants_mutationRemoved_new.fasta";
             ProteinDbWriter.WriteFastaDatabase(proteins, updatedDbPath, "|");
         }
 
@@ -1234,7 +1265,7 @@ namespace Test.DatabaseTests
         }
 
         [Test]
-        public static void FlyPrunedDb2()
+        public static void AddContaminants()
         {
             var reviewedAndPrunedPath = @"E:\Fly_TMT\Databases\reviewedAndPruned.fasta";
             var proteins = ProteinDbLoader.LoadProteinFasta(reviewedAndPrunedPath, true, DecoyType.None, true, out var errors);
@@ -1246,12 +1277,12 @@ namespace Test.DatabaseTests
         }
 
         [Test]
-        public static void FlyPrunedDb3()
+        public static void AddDecoys()
         {
-            var proteinsAndContaminantsPath = @"E:\Fly_TMT\reviewedAndPruned2_mutationRemoved_plusMMContaminants.fasta";
+            var proteinsAndContaminantsPath = @"E:\Fly_TMT\Databases\reviewedAndPruned_plusMMContaminants_mutationRemoved_new.fasta";
             var proteins = ProteinDbLoader.LoadProteinFasta(proteinsAndContaminantsPath, true, DecoyType.Reverse, true, out var errors, decoyIdentifier: "REV");
-            var proteinsAndContaminantsAndREVPath = @"E:\Fly_TMT\reviewedAndPruned2_mutationRemoved_plusMMContaminants_REV_Uniprot.fasta";
-            ProteinDbWriter.WriteFastaDatabase(proteins, proteinsAndContaminantsAndREVPath, "");
+            var proteinsAndContaminantsAndREVPath = proteinsAndContaminantsPath.Replace(".fasta", "_REV.fasta");
+            ProteinDbWriter.WriteFastaDatabase(proteins, proteinsAndContaminantsAndREVPath, " ");
         }
 
         public static (int, int) FindKRSite(string sequence, int mutationPos)
@@ -1296,6 +1327,26 @@ namespace Test.DatabaseTests
                 return true;
 
             return sequence[i + 1] != 'P';
+        }
+
+        [Test]
+        public static void TIC()
+        {
+            var directory = @"E:\Aneuploidy\Mistranslation_project\011626\040326_IS_test\";
+            var standard = @"E:\Aneuploidy\Mistranslation_project\011626\040326_IS_test\04-14-26_std-YL.raw";
+            var files = Directory.GetFiles(directory, "*04-18*");
+            var files2 = Directory.GetFiles(directory, "*04-19*");
+            var fileList3 = files.Concat(files2).ToList();
+            var fileLists2 = new List<string> { @"E:\Aneuploidy\Mistranslation_project\011626\040326_IS_test\04-16-26_TMT_mix.raw" ,
+            @"E:\Aneuploidy\Mistranslation_project\011626\040326_IS_test\04-17-26_YL_TMT.raw"};
+            var ticAreas = new Dictionary<string, string>();
+            fileList3.Add(standard);
+            foreach (var file in fileLists2)
+            {
+                var dataFile = MsDataFileReader.GetDataFile(file);
+                var ms1TicArea = dataFile.GetMS1Scans().Where(s => s.RetentionTime >= 15 && s.RetentionTime <= 80).Sum(s => s.TotalIonCurrent);
+                ticAreas[file] = $"{ms1TicArea:E2}";
+            }
         }
     }
 }
