@@ -106,8 +106,8 @@ namespace Test
             var allPeptidesTMT_file = new PsmFromTsvFile(allPeptidesTMT_path);
             var allPsms = allPeptidesTMT_file.Results.Where(p => p.QValue <= 0.01 && p.DecoyContamTarget == "T");
 
-            string outPath = @"E:\Islets\Brian_data\PTM\MS3_all_LFgptmdFilterPrunedDb\Peptides_PsmSum.tsv";
-            var columns = new List<string> { "BaseSequence", "FullSequence", "Mods", "Protein Accession", "Protein Name", "GeneName", "Description" };
+            string outPath = @"E:\Islets\Brian_data\PTM\MS3_all_LFgptmdFilterPrunedDb\Peptides_PsmSum_withAApos.tsv";
+            var columns = new List<string> { "BaseSequence", "FullSequence", "Mods", "Protein Accession", "Protein Name", "GeneName", "Description", "Start_and_End_Residues" };
             var labels = new List<string> { "126", "127N", "127C", "128N", "128C", "129N", "129C", "130N", "130C", "131N", "131C", "132N", "132C", "133N", "133C", "134N", "134C", "135N" };
             columns.AddRange(labels);
             using (StreamWriter writer = new StreamWriter(outPath))
@@ -117,7 +117,7 @@ namespace Test
                 foreach (var peptide in peptides)
                 {
                     var mods = String.Join(", ", SpectrumMatchFromTsv.ParseModifications(peptide.First().FullSequence).Values.Where(m => !notInteresting.Any(x => m.Contains(x))));
-                    var outString = new List<string> { peptide.First().BaseSequence, peptide.First().FullSequence, mods, peptide.First().ProteinAccession, peptide.First().ProteinName, peptide.First().GeneName, peptide.First().Description };
+                    var outString = new List<string> { peptide.First().BaseSequence, peptide.First().FullSequence, mods, peptide.First().ProteinAccession, peptide.First().ProteinName, peptide.First().GeneName, peptide.First().Description, peptide.First().StartAndEndResiduesInProtein };
 
                     var reporterIonIntensities = new double[peptide.First().Intensities.Count()];
                     foreach (var psm in peptide)
