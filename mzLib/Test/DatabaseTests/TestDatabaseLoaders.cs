@@ -1220,12 +1220,13 @@ namespace Test.DatabaseTests
             {
                 var protein = proteins.FirstOrDefault(p => p.Accession == group.Key);
                 if (protein == null) continue;
-                var peptides = protein.Digest(new DigestionParams(maxMissedCleavages: 0, initiatorMethionineBehavior: InitiatorMethionineBehavior.Retain), null, null);
+                var peptides = protein.Digest(new DigestionParams(maxMissedCleavages: 0, initiatorMethionineBehavior: InitiatorMethionineBehavior.Retain, maxPeptideLength: 25), null, null); //maxPeptideLength: 25 is MetaMorpheus search default but not mzLib DigestionParams constructor default
+                var toRemove = peptides.Where(p => group.Any(m => m.Position >= p.OneBasedStartResidue && m.Position <= p.OneBasedEndResidue)).OrderByDescending(p => p.OneBasedStartResidue);
+
                 var updatedSequence = protein.BaseSequence;
-                var toRemove = peptides.Where(p => group.Any(m => m.Position >= p.OneBasedStartResidue && m.Position <= p.OneBasedEndResidue)).Select(p => p.BaseSequence).ToList();
-                foreach (var peptide in toRemove.Distinct())
+                foreach (var peptide in toRemove)
                 {
-                    updatedSequence = updatedSequence.Replace(peptide, "");
+                    updatedSequence = updatedSequence.Remove(peptide.OneBasedStartResidue - 1, peptide.Length);
                 }
                 protein.BaseSequence = updatedSequence;
             }
@@ -1329,24 +1330,88 @@ namespace Test.DatabaseTests
             return sequence[i + 1] != 'P';
         }
 
+        static string CleanPeptideSequence(string seq)
+        {
+            // K.CCAADDK.E -> CCAADDK
+            var parts = seq.Split('.');
+            if (parts.Length == 3)
+                return parts[1];
+
+            return seq;
+        }
+
+        [Test]
+        public static void FilterPsms()
+        {
+            var reviewedAndPrunedPath = @"E:\Fly_TMT\Databases\reviewedAndPruned.fasta";
+            var proteins = ProteinDbLoader.LoadProteinFasta(reviewedAndPrunedPath, true, DecoyType.None, true, out var errors);
+            var mutationFile = @"E:\Fly_TMT\Databases\variant_aa_positions_uniprot_comprehensive_no_stop.txt";
+            var mutationLines = File.ReadAllLines(mutationFile);
+            var mutations = mutationLines.Skip(1).Select(line => new { Accession = line.Split('\t')[1], Position = int.Parse(line.Split('\t')[2]) }).ToList();
+            var groupedMutations = mutations.GroupBy(m => m.Accession);
+
+            var directory = @"E:\Fly_TMT\PAW_pruned\filtered_files";
+            var files = Directory.GetFiles(directory, "*txt");
+            foreach (var file in files)
+            {
+                var lines = File.ReadAllLines(file);
+                var header = lines[0];
+                var removeLines = new List<string> ();
+
+                foreach (var line in lines.Skip(1))
+                {
+                    var parts = line.Split('\t');
+                    var sequence = parts[8];
+                    var loci = parts[9].Split("|")[1];
+                    var peptideSeq = CleanPeptideSequence(sequence);
+                    var protein = proteins.FirstOrDefault(p => p.Accession == loci);
+                    if (protein == null)
+                        continue;
+
+                    var startIndex = protein.BaseSequence.IndexOf(peptideSeq);
+                    if (startIndex < 0)
+                        continue; // peptide not found in protein
+                    var startPosition = startIndex + 1; // 1-based protein position
+                    var endPosition = startPosition + peptideSeq.Length - 1;
+
+                    var mutationGroup = groupedMutations.FirstOrDefault(g => g.Key == protein.Accession);
+                    if (mutationGroup == null) continue;
+                    if (mutationGroup.Any(m => m.Position >= startPosition && m.Position <= endPosition))
+                    {
+                        removeLines.Add(line);
+                    }
+                }
+                var outputPath = file.Replace(".txt", "_mutationRemoved.txt");
+                var keptLines = lines.Where(l => !removeLines.Contains(l)).ToList();
+                File.WriteAllLines(outputPath, keptLines);
+            }
+        }
+
         [Test]
         public static void TIC()
         {
             var directory = @"E:\Aneuploidy\Mistranslation_project\011626\040326_IS_test\";
             var standard = @"E:\Aneuploidy\Mistranslation_project\011626\040326_IS_test\04-14-26_std-YL.raw";
-            var files = Directory.GetFiles(directory, "*04-18*");
-            var files2 = Directory.GetFiles(directory, "*04-19*");
-            var fileList3 = files.Concat(files2).ToList();
-            var fileLists2 = new List<string> { @"E:\Aneuploidy\Mistranslation_project\011626\040326_IS_test\04-16-26_TMT_mix.raw" ,
-            @"E:\Aneuploidy\Mistranslation_project\011626\040326_IS_test\04-17-26_YL_TMT.raw"};
+            var files = Directory.GetFiles(directory, "*04-25*").ToList();
+            var fileList2 = new List<string> { @"E:\Aneuploidy\Mistranslation_project\011626\042426_TMT\04-25-26_TMT_testMix_R4-R5.raw" ,
+            @"E:\Aneuploidy\Mistranslation_project\011626\040326_IS_test\04-17-26_YL_TMT.raw", @"E:\Aneuploidy\Mistranslation_project\011626\042426_TMT\04-24-26_TMT_testMix_R6-R7.raw"};
             var ticAreas = new Dictionary<string, string>();
-            fileList3.Add(standard);
-            foreach (var file in fileLists2)
+            files.Add(standard);
+            foreach (var file in files)
             {
                 var dataFile = MsDataFileReader.GetDataFile(file);
                 var ms1TicArea = dataFile.GetMS1Scans().Where(s => s.RetentionTime >= 15 && s.RetentionTime <= 80).Sum(s => s.TotalIonCurrent);
                 ticAreas[file] = $"{ms1TicArea:E2}";
             }
+        }
+
+        [Test]
+        public static void LabelingCheck()
+        {
+            var path = @"E:\Aneuploidy\Mistranslation_project\011626\042426_TMT\042526_testMix_R4-R5_labelingCheck\Task1-SearchTask\AllPeptides.psmtsv";
+            var psmFile = new PsmFromTsvFile(path);
+            var psms = psmFile.Results.Where(p => p.DecoyContamTarget == "T" && p.QValue <= 0.01).ToList();
+            var incomplete = psms.Where(p => SpectrumMatchFromTsv.ParseModifications(p.FullSequence).Values.Where(v => v.Contains("TMT")).Count() != p.BaseSeq.Count(c => c == 'K') + 1).ToList();
         }
     }
 }
