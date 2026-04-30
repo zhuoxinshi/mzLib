@@ -1268,19 +1268,19 @@ namespace Test.DatabaseTests
         [Test]
         public static void AddContaminants()
         {
-            var reviewedAndPrunedPath = @"E:\Fly_TMT\Databases\reviewedAndPruned.fasta";
+            var reviewedAndPrunedPath = @"E:\Databases\uniprotkb_taxonomy_id_559292_AND_review_2024_10_02.fasta";
             var proteins = ProteinDbLoader.LoadProteinFasta(reviewedAndPrunedPath, true, DecoyType.None, true, out var errors);
             var contaminantDb = @"E:\GitClones\MetaMorpheus\MetaMorpheus\GUI\bin\Debug\net8.0-windows\Contaminants\MetaMorpheusContaminants.xml";
             var contaminants = ProteinDbLoader.LoadProteinXML(contaminantDb, true, DecoyType.None, new List<Modification>(), false, new List<string>(), out var errors3); 
             var proteinsAndContaminants = proteins.Concat(contaminants).ToList();
-            var proteinsAndContaminantsPath = @"E:\Fly_TMT\reviewedAndPruned2_mutationRemoved_plusMMContaminants.fasta";
+            var proteinsAndContaminantsPath = @"E:\Databases\uniprotkb_taxonomy_id_559292_AND_review_2024_10_02_plusMMContaminants.fasta";
             ProteinDbWriter.WriteFastaDatabase(proteinsAndContaminants, proteinsAndContaminantsPath, "");
         }
 
         [Test]
         public static void AddDecoys()
         {
-            var proteinsAndContaminantsPath = @"E:\Fly_TMT\Databases\reviewedAndPruned_plusMMContaminants_mutationRemoved_new.fasta";
+            var proteinsAndContaminantsPath = @"E:\Databases\uniprotkb_taxonomy_id_559292_AND_review_2024_10_02_plusMMContaminants.fasta";
             var proteins = ProteinDbLoader.LoadProteinFasta(proteinsAndContaminantsPath, true, DecoyType.Reverse, true, out var errors, decoyIdentifier: "REV");
             var proteinsAndContaminantsAndREVPath = proteinsAndContaminantsPath.Replace(".fasta", "_REV.fasta");
             ProteinDbWriter.WriteFastaDatabase(proteins, proteinsAndContaminantsAndREVPath, " ");
@@ -1390,17 +1390,17 @@ namespace Test.DatabaseTests
         [Test]
         public static void TIC()
         {
-            var directory = @"E:\Aneuploidy\Mistranslation_project\011626\040326_IS_test\";
+            var directory = @"E:\Aneuploidy\Mistranslation_project\011626\042426_TMT";
+            var islet_dir = @"E:\Islets\Brian_data\Real_islets\Frxn";
             var standard = @"E:\Aneuploidy\Mistranslation_project\011626\040326_IS_test\04-14-26_std-YL.raw";
-            var files = Directory.GetFiles(directory, "*04-25*").ToList();
-            var fileList2 = new List<string> { @"E:\Aneuploidy\Mistranslation_project\011626\042426_TMT\04-25-26_TMT_testMix_R4-R5.raw" ,
-            @"E:\Aneuploidy\Mistranslation_project\011626\040326_IS_test\04-17-26_YL_TMT.raw", @"E:\Aneuploidy\Mistranslation_project\011626\042426_TMT\04-24-26_TMT_testMix_R6-R7.raw"};
+            var files = Directory.GetFiles(directory, "*04-28*").ToList();
+            var fileList2 = new List<string> {@"E:\Aneuploidy\Mistranslation_project\011626\040326_IS_test\04-17-26_YL_TMT.raw", @"E:\Aneuploidy\Mistranslation_project\011626\042426_TMT\04-28-26_TMT_R6-R7_E5.raw", @"E:\Islets\Brian_data\Real_islets\Frxn\02-20-26_Frxn6_IsletDrugStudy_1p5uL.raw" };
             var ticAreas = new Dictionary<string, string>();
             files.Add(standard);
             foreach (var file in files)
             {
                 var dataFile = MsDataFileReader.GetDataFile(file);
-                var ms1TicArea = dataFile.GetMS1Scans().Where(s => s.RetentionTime >= 15 && s.RetentionTime <= 80).Sum(s => s.TotalIonCurrent);
+                var ms1TicArea = dataFile.GetMS1Scans().Where(s => s.RetentionTime >= 20 && s.RetentionTime <= 130).Sum(s => s.TotalIonCurrent);
                 ticAreas[file] = $"{ms1TicArea:E2}";
             }
         }
@@ -1408,10 +1408,21 @@ namespace Test.DatabaseTests
         [Test]
         public static void LabelingCheck()
         {
-            var path = @"E:\Aneuploidy\Mistranslation_project\011626\042426_TMT\042526_testMix_R4-R5_labelingCheck\Task1-SearchTask\AllPeptides.psmtsv";
+            var path = @"E:\Aneuploidy\Mistranslation_project\011626\042426_TMT\042526_testMix_R2-R3_labelingCheck\Task1-SearchTask\AllPeptides.psmtsv";
             var psmFile = new PsmFromTsvFile(path);
             var psms = psmFile.Results.Where(p => p.DecoyContamTarget == "T" && p.QValue <= 0.01).ToList();
             var incomplete = psms.Where(p => SpectrumMatchFromTsv.ParseModifications(p.FullSequence).Values.Where(v => v.Contains("TMT")).Count() != p.BaseSeq.Count(c => c == 'K') + 1).ToList();
+        }
+
+        [Test]
+        public static void MassErrorCompare()
+        {
+            var isletData = @"E:\Islets\Brian_data\Real_islets\Frxn\Frxn5-9_search-cali-search\Task1-SearchTask\AllPSMs.psmtsv";
+            var myData = @"E:\Aneuploidy\Mistranslation_project\011626\042426_TMT\042526_testMix_R2-R3_search-cali-search\Task1-SearchTask\AllPSMs.psmtsv";
+            var isletPsms = new PsmFromTsvFile(isletData).Results.Where(p => p.DecoyContamTarget == "T" && p.QValue <= 0.01);
+            var isletMassErrors = isletPsms.SelectMany(p => p.MatchedIons.Select(i => i.MassErrorDa)).ToList();
+            var myPsms = new PsmFromTsvFile(myData).Results.Where(p => p.DecoyContamTarget == "T" && p.QValue <= 0.01).ToList();
+            var myMassErrors = myPsms.SelectMany(p => p.MatchedIons.Select(i => i.MassErrorDa)).ToList();
         }
     }
 }
