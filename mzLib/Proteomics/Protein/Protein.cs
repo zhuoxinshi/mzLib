@@ -177,7 +177,7 @@ namespace Proteomics
         /// <summary>
         /// Unique accession for this protein.
         /// </summary>
-        public string Accession { get; }
+        public string Accession { get; set; } //changed
 
         /// <summary>
         /// Base sequence, which may contain applied sequence variations.

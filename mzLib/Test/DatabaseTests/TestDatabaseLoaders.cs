@@ -1268,21 +1268,25 @@ namespace Test.DatabaseTests
         [Test]
         public static void AddContaminants()
         {
-            var reviewedAndPrunedPath = @"E:\Databases\uniprotkb_taxonomy_id_559292_AND_review_2024_10_02.fasta";
+            var reviewedAndPrunedPath = @"E:\Fly_TMT\Databases\reviewedAndPruned.fasta";
             var proteins = ProteinDbLoader.LoadProteinFasta(reviewedAndPrunedPath, true, DecoyType.None, true, out var errors);
             var contaminantDb = @"E:\GitClones\MetaMorpheus\MetaMorpheus\GUI\bin\Debug\net8.0-windows\Contaminants\MetaMorpheusContaminants.xml";
-            var contaminants = ProteinDbLoader.LoadProteinXML(contaminantDb, true, DecoyType.None, new List<Modification>(), false, new List<string>(), out var errors3); 
+            var contaminants = ProteinDbLoader.LoadProteinXML(contaminantDb, true, DecoyType.None, new List<Modification>(), false, new List<string>(), out var errors3);
+            foreach(var c in contaminants)
+            {
+                c.Accession = c.Accession.StartsWith("CONT_") ? c.Accession : "CONT_" + c.Accession;
+            }
             var proteinsAndContaminants = proteins.Concat(contaminants).ToList();
-            var proteinsAndContaminantsPath = @"E:\Databases\uniprotkb_taxonomy_id_559292_AND_review_2024_10_02_plusMMContaminants.fasta";
+            var proteinsAndContaminantsPath = @"E:\Fly_TMT\Databases\reviewedAndPruned_plusCONT_Uniprot.fasta";
             ProteinDbWriter.WriteFastaDatabase(proteinsAndContaminants, proteinsAndContaminantsPath, "");
         }
 
         [Test]
         public static void AddDecoys()
         {
-            var proteinsAndContaminantsPath = @"E:\Databases\uniprotkb_taxonomy_id_559292_AND_review_2024_10_02_plusMMContaminants.fasta";
+            var proteinsAndContaminantsPath = @"E:\Fly_TMT\Databases\reviewedAndPruned_plusCONT_Uniprot.fasta";
             var proteins = ProteinDbLoader.LoadProteinFasta(proteinsAndContaminantsPath, true, DecoyType.Reverse, true, out var errors, decoyIdentifier: "REV");
-            var proteinsAndContaminantsAndREVPath = proteinsAndContaminantsPath.Replace(".fasta", "_REV.fasta");
+            var proteinsAndContaminantsAndREVPath = proteinsAndContaminantsPath.Replace("_Uniprot.fasta", "_REV_Ensembl.fasta");
             ProteinDbWriter.WriteFastaDatabase(proteins, proteinsAndContaminantsAndREVPath, " ");
         }
 
@@ -1350,7 +1354,7 @@ namespace Test.DatabaseTests
             var mutations = mutationLines.Skip(1).Select(line => new { Accession = line.Split('\t')[1], Position = int.Parse(line.Split('\t')[2]) }).ToList();
             var groupedMutations = mutations.GroupBy(m => m.Accession);
 
-            var directory = @"E:\Fly_TMT\PAW_pruned\filtered_files";
+            var directory = @"E:\Fly_TMT\PAW_pruned_CONT_filterPSMs\filtered_files";
             var files = Directory.GetFiles(directory, "*txt");
             foreach (var file in files)
             {
@@ -1362,7 +1366,7 @@ namespace Test.DatabaseTests
                 {
                     var parts = line.Split('\t');
                     var sequence = parts[8];
-                    var loci = parts[9].Split("|")[1];
+                    var loci = parts[9];
                     var peptideSeq = CleanPeptideSequence(sequence);
                     var protein = proteins.FirstOrDefault(p => p.Accession == loci);
                     if (protein == null)
@@ -1393,10 +1397,10 @@ namespace Test.DatabaseTests
             var directory = @"E:\Aneuploidy\Mistranslation_project\011626\042426_TMT";
             var islet_dir = @"E:\Islets\Brian_data\Real_islets\Frxn";
             var standard = @"E:\Aneuploidy\Mistranslation_project\011626\040326_IS_test\04-14-26_std-YL.raw";
-            var files = Directory.GetFiles(directory, "*04-28*").ToList();
+            var files = Directory.GetFiles(directory, "*redo*").ToList();
             var fileList2 = new List<string> {@"E:\Aneuploidy\Mistranslation_project\011626\040326_IS_test\04-17-26_YL_TMT.raw", @"E:\Aneuploidy\Mistranslation_project\011626\042426_TMT\04-28-26_TMT_R6-R7_E5.raw", @"E:\Islets\Brian_data\Real_islets\Frxn\02-20-26_Frxn6_IsletDrugStudy_1p5uL.raw" };
             var ticAreas = new Dictionary<string, string>();
-            files.Add(standard);
+            //files.Add(standard);
             foreach (var file in files)
             {
                 var dataFile = MsDataFileReader.GetDataFile(file);
