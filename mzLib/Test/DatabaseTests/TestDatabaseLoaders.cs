@@ -1394,10 +1394,10 @@ namespace Test.DatabaseTests
         [Test]
         public static void TIC()
         {
-            var directory = @"E:\Aneuploidy\Mistranslation_project\011626\042426_TMT";
+            var directory = @"E:\Aneuploidy\Mistranslation_project\011626\022326_high-pH\UPLC";
             var islet_dir = @"E:\Islets\Brian_data\Real_islets\Frxn";
             var standard = @"E:\Aneuploidy\Mistranslation_project\011626\040326_IS_test\04-14-26_std-YL.raw";
-            var files = Directory.GetFiles(directory, "*redo*").ToList();
+            var files = Directory.GetFiles(directory, "*.raw").ToList();
             var fileList2 = new List<string> {@"E:\Aneuploidy\Mistranslation_project\011626\040326_IS_test\04-17-26_YL_TMT.raw", @"E:\Aneuploidy\Mistranslation_project\011626\042426_TMT\04-28-26_TMT_R6-R7_E5.raw", @"E:\Islets\Brian_data\Real_islets\Frxn\02-20-26_Frxn6_IsletDrugStudy_1p5uL.raw" };
             var ticAreas = new Dictionary<string, string>();
             //files.Add(standard);
