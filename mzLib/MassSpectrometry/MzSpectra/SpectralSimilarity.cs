@@ -8,7 +8,7 @@ namespace MassSpectrometry.MzSpectra
 {
     public class SpectralSimilarity
     {
-        public SpectralSimilarity(MzSpectrum experimentalSpectrum, MzSpectrum theoreticalSpectrum, SpectrumNormalizationScheme scheme, double toleranceInPpm, bool allPeaks, double filterOutBelowThisMz = 300)
+        public SpectralSimilarity(MzSpectrum experimentalSpectrum, MzSpectrum theoreticalSpectrum, SpectrumNormalizationScheme scheme, double toleranceInPpm, bool allPeaks, double filterOutBelowThisMz = 300, Tolerance tol = null)
         {
             ExperimentalYArray = Normalize(FilterOutIonsBelowThisMzAndRemoveZeroIntensityPeaks(experimentalSpectrum.XArray,experimentalSpectrum.YArray, filterOutBelowThisMz).Select(p=>p.Item2).ToArray(),scheme);
             ExperimentalXArray = FilterOutIonsBelowThisMzAndRemoveZeroIntensityPeaks(experimentalSpectrum.XArray, experimentalSpectrum.YArray, filterOutBelowThisMz).Select(p => p.Item1).ToArray();
@@ -17,6 +17,7 @@ namespace MassSpectrometry.MzSpectra
             _localPpmTolerance = toleranceInPpm;
             _scheme = scheme;
             _allPeaks = allPeaks;
+            LocalTolerance = tol ?? new PpmTolerance(toleranceInPpm);
             IntensityPairs = GetIntensityPairs(allPeaks);
         }
 
@@ -47,6 +48,7 @@ namespace MassSpectrometry.MzSpectra
         public double[] ExperimentalXArray { get; }
         public double[] TheoreticalYArray { get; }
         public double[] TheoreticalXArray { get; }
+        public Tolerance LocalTolerance { get; set; }
 
         private readonly double _localPpmTolerance;
         private readonly SpectrumNormalizationScheme _scheme;
@@ -145,7 +147,7 @@ namespace MassSpectrometry.MzSpectra
                 int index = 0;
                 while (experimental.Count > 0 && index < experimental.Count)
                 {
-                    if (Within(experimental[index].Item1, xyPair.Item1))
+                    if (LocalTolerance.Within(experimental[index].Item1, xyPair.Item1))
                     {
                         intensityPairs.Add((experimental[index].Item2, xyPair.Item2));
                         experimental.RemoveAt(index);

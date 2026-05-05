@@ -29,24 +29,29 @@ namespace Test.Islet_PTM
 
             string allPSMs_path = @"E:\Islets\Brian_data\PTM\MS3_all_LFgptmdFilterPrunedDb\Task1-SearchTask\AllPSMs.psmtsv";
             var allPSMsTMT_file = new PsmFromTsvFile(allPSMs_path);
-            var allPsms = allPSMsTMT_file.Results.Where(p => p.QValue <= 0.01 && p.DecoyContamTarget == "T" && !p.FullSequence.Contains("|"));
+            var allPsms = allPSMsTMT_file.Results.Where(p => p.QValue <= 0.01 && p.DecoyContamTarget == "T" && p.AmbiguityLevel== "1");
             var allPeptides_path = @"E:\Islets\Brian_data\PTM\MS3_all_LFgptmdFilterPrunedDb\Task1-SearchTask\AllPeptides.psmtsv";
             var allPeptidesTMT_file = new PsmFromTsvFile(allPeptides_path);
-            var allPeptides = allPeptidesTMT_file.Results.Where(p => p.QValue <= 0.01 && p.DecoyContamTarget == "T" && !p.FullSequence.Contains("|"));
+            var allPeptides = allPeptidesTMT_file.Results.Where(p => p.QValue <= 0.01 && p.DecoyContamTarget == "T" && p.AmbiguityLevel == "1");
             var allPeptidesWithMod = allPeptides.Where(p => SpectrumMatchFromTsv.ParseModifications(p.FullSequence).Values.Any(v => !notInteresting.Any(key => v.Contains(key))));
-            
+            var uniquePsmsWithMod = allPsms.GroupBy(p => p.FullSequence).Select(g => g.First()).Where(p => SpectrumMatchFromTsv.ParseModifications(p.FullSequence).Values.Any(v => !notInteresting.Any(key => v.Contains(key))));
+
             var allPtms = new List<PtmRecord>();
-            foreach (var peptide in allPeptidesWithMod)
+            foreach (var peptide in uniquePsmsWithMod)
             {
                 var allMods = SpectrumMatchFromTsv.ParseModifications(peptide.FullSequence).Where(kvp => !notInteresting.Any(key => kvp.Value.Contains(key)));
-                int startAA = int.Parse(peptide.StartAndEndResiduesInParentSequence.Split()[0].Split("[")[1]);
+                int startAA = int.Parse(peptide.StartAndEndResiduesInProtein.Split()[0].Split("[")[1]);
                 foreach (var mod in allMods)
                 {
                     int modSite = mod.Key + startAA;
                     if (mod.Key != 0) modSite = modSite - 1;
-                    allPtms.Add(new PtmRecord { Accession = peptide.ProteinAccession, ModSite = modSite, Mod = mod.Value });
+                    if (mod.Key == 0 && startAA != 1) continue;
+                    var modName = mod.Value.Split(':')[1].Split(' ')[0];
+                    var parsedModName = Ptm_tmt.ParseModNameForDeepLC(modName);
+                    allPtms.Add(new PtmRecord { Accession = peptide.ProteinAccession, ModSite = modSite, Mod = parsedModName });
                 }
             }
+            var distinctPtms = allPtms.Distinct().ToList();
             var allPtmGroups = allPtms.GroupBy(ptm => new {a = ptm.Accession, m = ptm.ModSite}).ToList();
         }
 

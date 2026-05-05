@@ -39,16 +39,16 @@ namespace Test
         [Test]
         public static void TestMs2PIPinput()
         {
-            var allPeptideLow_path = @"E:\Islets\Brian_data\PTM\All_LFgptmdFilterPrunedDb\Task1-SearchTask\AllPeptides.psmtsv";
+            var allPeptideLow_path = @"E:\Islets\Brian_data\PTM\MS3_all_LFgptmdFilterPrunedDb\Task1-SearchTask\AllPeptides.psmtsv";
             var allPeptidesLow_file = new PsmFromTsvFile(allPeptideLow_path);
-            var allPeptidesLow = allPeptidesLow_file.Results.Where(p => p.QValue <= 0.01 && p.DecoyContamTarget == "T");
-            var allPeptidesHigh_path = @"E:\Islets\Brian_data\HighResTMT\noCali_LFgptmdFilterPruned\Task1-SearchTask\AllPeptides.psmtsv";
-            var allPeptidesHigh_file = new PsmFromTsvFile(allPeptidesHigh_path);
-            var allPeptidesHigh = allPeptidesHigh_file.Results.Where(p => p.QValue <= 0.01 && p.DecoyContamTarget == "T");
-            var allPeptidesHighNoMod = Ptm_tmt.GetUnmodifiedPeptides(allPeptidesHigh);
-            var allPeptidesWithModsHigh = Ptm_tmt.GetModifiedPeptides(allPeptidesHigh);
+            var allPeptidesLow = allPeptidesLow_file.Results.Where(p => p.QValue <= 0.01 && p.DecoyContamTarget == "T" && p.AmbiguityLevel == "1");
+            //var allPeptidesHigh_path = @"E:\Islets\Brian_data\HighResTMT\noCali_LFgptmdFilterPruned\Task1-SearchTask\AllPeptides.psmtsv";
+            //var allPeptidesHigh_file = new PsmFromTsvFile(allPeptidesHigh_path);
+            //var allPeptidesHigh = allPeptidesHigh_file.Results.Where(p => p.QValue <= 0.01 && p.DecoyContamTarget == "T");
+            //var allPeptidesHighNoMod = Ptm_tmt.GetUnmodifiedPeptides(allPeptidesHigh);
+            //var allPeptidesWithModsHigh = Ptm_tmt.GetModifiedPeptides(allPeptidesHigh);
 
-            var outPath = @"E:\Islets\Brian_data\PTM\All_LFgptmdFilterPrunedDb\TargetMod_input_ms2pip.peprec";
+            var outPath = @"E:\Islets\Brian_data\PTM\MS3_all_LFgptmdFilterPrunedDb\TargetMod_input_ms2pip.peprec";
             using (StreamWriter writer = new StreamWriter(outPath))
             {
                 writer.WriteLine("spec_id modifications peptide charge");
@@ -67,30 +67,39 @@ namespace Test
         {
             var notInteresting = new List<string> { "TMT18", "Fixed", "Artifact", "Variable", "Metal" };
 
-            var allPeptidesHigh_path = @"E:\Islets\Brian_data\HighResTMT\noCali_LFgptmdFilterPruned\Task1-SearchTask\AllPeptides.psmtsv";
-            var allPeptidesHigh_file = new PsmFromTsvFile(allPeptidesHigh_path);
-            var allPeptidesHigh = allPeptidesHigh_file.Results.Where(p => p.QValue <= 0.01 && p.DecoyContamTarget == "T");
-            var allPeptidesHighNoMod = allPeptidesHigh.Where(p => SpectrumMatchFromTsv.ParseModifications(p.FullSequence).Values.All(v => v.Contains("Fixed") || v.Contains("Variable") || v.Contains("TMT")) && !p.FullSequence.Contains("|") && p.Score >= 10);
-            var allPeptidesWithModsHigh = allPeptidesHigh.Where(p => SpectrumMatchFromTsv.ParseModifications(p.FullSequence).Values.Any(v => !notInteresting.Any(key => v.Contains(key)))).ToList();
+            var allPeptides_path = @"E:\Islets\Brian_data\PTM\MS3_all_LFgptmdFilterPrunedDb\Task1-SearchTask\AllPeptides.psmtsv";
+            var allPeptides_file = new PsmFromTsvFile(allPeptides_path);
+            var allPeptides = allPeptides_file.Results.Where(p => p.QValue <= 0.01 && p.DecoyContamTarget == "T" && p.AmbiguityLevel == "1");
+            var allPeptidesNoMod = allPeptides.Where(p => SpectrumMatchFromTsv.ParseModifications(p.FullSequence).Values.All(v => v.Contains("Fixed") || v.Contains("Variable") || v.Contains("TMT")) && !p.FullSequence.Contains("|"));// && p.Score >= 10
+            var allPeptidesWithMods = allPeptides.Where(p => SpectrumMatchFromTsv.ParseModifications(p.FullSequence).Values.Any(v => !notInteresting.Any(key => v.Contains(key)))).ToList();
 
-            var raw_directory = @"E:\Islets\Brian_data\HighResTMT";
-            var raw_paths = Directory.GetFiles(raw_directory, "*.raw", SearchOption.AllDirectories);
+            var raw_directory = @"E:\Islets\Brian_data\Real_islets\Frxn";
+            var raw_paths = Directory.GetFiles(raw_directory, "*.raw");//, SearchOption.AllDirectories
             var rawFilesDict = raw_paths.ToDictionary(r => r, r => MsDataFileReader.GetDataFile(r));
 
-            var libraryPath = @"E:\Islets\Brian_data\HighResTMT\noCali_LFgptmdFilterPruned\TargetMod_modelTMT_ms2pip.msp";
+            var libraryPath = @"E:\Islets\Brian_data\PTM\MS3_all_LFgptmdFilterPrunedDb\TargetMod_modelCID-TMT_ms2pip.msp";
             var spectralLibrary = new SpectralLibrary(new List<string> { libraryPath });
             var allLibrarySepctra = spectralLibrary.Results;
             var similarities = new List<double>();
-            foreach (var peptide in allPeptidesWithModsHigh)
+
+            var similarityOutPath = @"E:\Islets\Brian_data\PTM\MS3_all_LFgptmdFilterPrunedDb\SpectralSimilarity_TargetMod_modelCID-TMT_ms2pip_0.2Da.tsv";
+            using (StreamWriter writer = new StreamWriter(similarityOutPath))
             {
-                var rawFile = rawFilesDict.FirstOrDefault(kvp => kvp.Key.Contains(peptide.FileName)).Value;
-                var rawScan = rawFile.GetOneBasedScan(peptide.Ms2ScanNumber);
-                var tol = new PpmTolerance(20);
-                var librarySpectrum = spectralLibrary.Results.FirstOrDefault(s => IBioPolymerWithSetMods.GetBaseSequenceFromFullSequence(s.Sequence) == peptide.BaseSeq && s.ChargeState == peptide.ChargeState && tol.Within(s.PrecursorMz.ToMass(s.ChargeState), peptide.MonoisotopicMass));//Math.Round(s.PrecursorMz, 0) == Math.Round(peptide.PrecursorMass.ToMz(peptide.ChargeState), 0)
-                if (librarySpectrum != null)
+                writer.WriteLine("FileName\tRawScan\tPeptide");
+                foreach (var peptide in Ptm_tmt.GetModifiedPeptides(allPeptides))
                 {
-                    var similarity = new SpectralSimilarity(rawScan.MassSpectrum, librarySpectrum, SpectralSimilarity.SpectrumNormalizationScheme.SquareRootSpectrumSum, 20, false);
-                    similarities.Add(similarity.CosineSimilarity().Value);
+                    var rawFile = rawFilesDict.FirstOrDefault(kvp => kvp.Key.Contains(peptide.FileName)).Value;
+                    var rawScan = rawFile.GetOneBasedScan(peptide.Ms2ScanNumber);
+                    var precursorTol = new PpmTolerance(20);
+                    var productTol = new AbsoluteTolerance(0.2);
+                    var librarySpectrum = spectralLibrary.Results.FirstOrDefault(s => IBioPolymerWithSetMods.GetBaseSequenceFromFullSequence(s.Sequence) == peptide.BaseSeq && s.ChargeState == peptide.ChargeState && precursorTol.Within(s.PrecursorMz.ToMass(s.ChargeState), peptide.MonoisotopicMass));//Math.Round(s.PrecursorMz, 0) == Math.Round(peptide.PrecursorMass.ToMz(peptide.ChargeState), 0)
+                    if (librarySpectrum != null)
+                    {
+                        var similarity = new SpectralSimilarity(rawScan.MassSpectrum, librarySpectrum, SpectralSimilarity.SpectrumNormalizationScheme.SquareRootSpectrumSum, 20, false, tol: productTol);
+                        similarities.Add(similarity.CosineSimilarity().Value);
+                        var outString = new List<string> { $"{rawFile.SourceFile.FileName}",rawScan.OneBasedScanNumber.ToString(), peptide.FullSequence };
+                        writer.WriteLine(string.Join("\t", outString));
+                    }
                 }
             }
         }
