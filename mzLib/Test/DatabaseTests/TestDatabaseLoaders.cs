@@ -1394,7 +1394,7 @@ namespace Test.DatabaseTests
         [Test]
         public static void TIC()
         {
-            var directory = @"E:\Aneuploidy\Mistranslation_project\011626\022326_high-pH\UPLC";
+            var directory = @"E:\Aneuploidy\Mistranslation_project\011626\042426_TMT\TMT_pool_test";
             var islet_dir = @"E:\Islets\Brian_data\Real_islets\Frxn";
             var standard = @"E:\Aneuploidy\Mistranslation_project\011626\040326_IS_test\04-14-26_std-YL.raw";
             var files = Directory.GetFiles(directory, "*.raw").ToList();
