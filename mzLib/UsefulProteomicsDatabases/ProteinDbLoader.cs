@@ -15,11 +15,12 @@ using Omics.BioPolymer;
 using Omics.Modifications;
 using Transcriptomics;
 using Omics.Modifications.IO;
+using ICSharpCode.SharpZipLib.Zip;
 
 namespace UsefulProteomicsDatabases
 {
     public enum FastaHeaderType
-    { UniProt, Ensembl, Gencode, Unknown }
+    { UniProt, Ensembl, Gencode, Unknown, Custom }
 
     public static class ProteinDbLoader
     {
@@ -36,6 +37,9 @@ namespace UsefulProteomicsDatabases
         public static readonly FastaHeaderFieldRegex GencodeAccessionRegex = new FastaHeaderFieldRegex("accession", @">(.*?)\|", 0, 1);
         public static readonly FastaHeaderFieldRegex GencodeFullNameRegex = new FastaHeaderFieldRegex("fullName", @">(?:.*?)\|(?:.*?)\|(?:.*?)\|(?:.*?)\|(?:.*?)\|(.*?)\|", 0, 1);
         public static readonly FastaHeaderFieldRegex GencodeGeneNameRegex = new FastaHeaderFieldRegex("geneName", @">(?:.*?)\|(?:.*?)\|(?:.*?)\|(?:.*?)\|(?:.*?)\|(?:.*?)\|(.*?)\|", 0, 1);
+
+        public static readonly FastaHeaderFieldRegex CustomAccessionRegex = new FastaHeaderFieldRegex("accession", @">([^ ]*)", 0, 1);
+        public static readonly FastaHeaderFieldRegex CustomFullNameRegex = new FastaHeaderFieldRegex("fullName", @"^>\S+\s+(.+)", 0, 1);
 
         public static Dictionary<string, IList<Modification>> IdToPossibleMods = new Dictionary<string, IList<Modification>>();
         public static Dictionary<string, Modification> IdWithMotifToMod = new Dictionary<string, Modification>();
@@ -242,7 +246,8 @@ namespace UsefulProteomicsDatabases
                         // determine the header type if necessary (this figures out how to parse the different fields in the fasta headers)
                         if (HeaderType == null && accessionRegex == null)
                         {
-                            HeaderType = DetectFastaHeaderFormat(line);
+                            HeaderType = FastaHeaderType.Custom;
+                            //HeaderType = DetectFastaHeaderFormat(line);
 
                             if (HeaderType == FastaHeaderType.Unknown)
                             {
@@ -269,6 +274,11 @@ namespace UsefulProteomicsDatabases
                                     accessionRegex = GencodeAccessionRegex;
                                     fullNameRegex = GencodeFullNameRegex;
                                     geneNameRegex = GencodeGeneNameRegex;
+                                    break;
+
+                                case FastaHeaderType.Custom:
+                                    accessionRegex = CustomAccessionRegex;
+                                    fullNameRegex = CustomFullNameRegex;
                                     break;
                             }
                         }

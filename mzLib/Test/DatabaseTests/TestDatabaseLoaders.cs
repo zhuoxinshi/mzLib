@@ -1268,25 +1268,25 @@ namespace Test.DatabaseTests
         [Test]
         public static void AddContaminants()
         {
-            var reviewedAndPrunedPath = @"E:\Fly_TMT\Databases\reviewedAndPruned.fasta";
+            var reviewedAndPrunedPath = @"E:\Aneuploidy\Database\YPS1009-protein-ALL_3-2026.fasta";
             var proteins = ProteinDbLoader.LoadProteinFasta(reviewedAndPrunedPath, true, DecoyType.None, true, out var errors);
             var contaminantDb = @"E:\GitClones\MetaMorpheus\MetaMorpheus\GUI\bin\Debug\net8.0-windows\Contaminants\MetaMorpheusContaminants.xml";
             var contaminants = ProteinDbLoader.LoadProteinXML(contaminantDb, true, DecoyType.None, new List<Modification>(), false, new List<string>(), out var errors3);
-            foreach(var c in contaminants)
+            foreach (var c in contaminants)
             {
                 c.Accession = c.Accession.StartsWith("CONT_") ? c.Accession : "CONT_" + c.Accession;
             }
             var proteinsAndContaminants = proteins.Concat(contaminants).ToList();
-            var proteinsAndContaminantsPath = @"E:\Fly_TMT\Databases\reviewedAndPruned_plusCONT_Uniprot.fasta";
-            ProteinDbWriter.WriteFastaDatabase(proteinsAndContaminants, proteinsAndContaminantsPath, "");
+            var proteinsAndContaminantsPath = @"E:\Aneuploidy\Database\YPS1009-protein-ALL_3-2026_plusCONT.fasta";
+            ProteinDbWriter.WriteFastaDatabase(proteinsAndContaminants, proteinsAndContaminantsPath, " ");
         }
 
         [Test]
         public static void AddDecoys()
         {
-            var proteinsAndContaminantsPath = @"E:\Fly_TMT\Databases\reviewedAndPruned_plusCONT_Uniprot.fasta";
+            var proteinsAndContaminantsPath = @"E:\Aneuploidy\Database\YPS1009-protein-ALL_3-2026_plusCONT.fasta";
             var proteins = ProteinDbLoader.LoadProteinFasta(proteinsAndContaminantsPath, true, DecoyType.Reverse, true, out var errors, decoyIdentifier: "REV");
-            var proteinsAndContaminantsAndREVPath = proteinsAndContaminantsPath.Replace("_Uniprot.fasta", "_REV_Ensembl.fasta");
+            var proteinsAndContaminantsAndREVPath = proteinsAndContaminantsPath.Replace(".fasta", "_REV.fasta");
             ProteinDbWriter.WriteFastaDatabase(proteins, proteinsAndContaminantsAndREVPath, " ");
         }
 
