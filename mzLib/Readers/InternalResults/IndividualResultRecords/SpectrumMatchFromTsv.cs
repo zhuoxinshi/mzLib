@@ -64,7 +64,7 @@ namespace Readers
 
         public List<MatchedFragmentIon> VariantCrossingIons { get; protected set; }
 
-        public double[]? Intensities { get; protected set; }
+        public double[]? Intensities { get;  set; } //changed from protected set 
 
         #region IQuantifiableRecord Properties and Methods
         public string FileName => FileNameWithoutExtension;

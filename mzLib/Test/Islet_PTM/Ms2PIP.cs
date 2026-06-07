@@ -19,22 +19,38 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
-using Readers;
-using NUnit.Framework;
-using System.Windows.Markup;
 using Omics;
 using System.Data.Entity.Core.Common.CommandTrees.ExpressionBuilder;
 using System.IO;
 using System.Text.RegularExpressions;
-using System.Windows.Shapes;
 using Easy.Common.Extensions;
 using Chemistry;
+using PredictionClients.Koina.AbstractClasses;
+using PredictionClients.Koina.SupportedModels.FragmentIntensityModels;
+using PredictionClients.Koina.Util;
+using MassSpectrometry;
 
 namespace Test
 {
     public class Ms2PIP
     {
+        public static string ParseSequenceForMs2PIP(string fullSequence)
+        {
+            var sb = new StringBuilder();
+            var mods = SpectrumMatchFromTsv.ParseModifications(fullSequence);
+            for (int i = 0; i < fullSequence.Length; i++)
+            {
+                char c = fullSequence[i];
+                sb.Append(c);
+                if (mods.ContainsKey(i))
+                {
+                    var modName = mods[i].Split(':')[1].Split(' ')[0];
+                    var parsedModName = DeepLC.ParseModNameForDeepLC(modName);
+                    sb.Append($"[{parsedModName}]");
+                }
+            }
+            return sb.ToString();
+        }
 
         [Test]
         public static void TestMs2PIPinput()
@@ -54,7 +70,7 @@ namespace Test
                 writer.WriteLine("spec_id modifications peptide charge");
                 foreach (var peptide in Ptm_tmt.GetModifiedPeptides(allPeptidesLow))
                 {
-                    var parsedMods = Ptm_tmt.ParseModsForDeepLC(peptide.FullSequence);
+                    var parsedMods = DeepLC.ParseModsForDeepLC(peptide.FullSequence);
                     if (parsedMods == null) continue;
                     var outString = new List<string> { $"scan{peptide.Ms2ScanNumber}", parsedMods, peptide.BaseSeq, peptide.ChargeState.ToString() };
                     writer.WriteLine(string.Join(" ", outString));
@@ -119,9 +135,10 @@ namespace Test
         }
 
         [Test]
-        public static void TestSimilarityFromMatchedFragmentIons()
+        public static void TestMs2PIP()
         {
-
+            string fullSeq = "[Multiplex Label:TMT18 on X]GQAGPEGAAP[Common Biological:Hydroxylation on P]APEEDK[Multiplex Label:TMT18 on K]";
+            var parsed = ParseSequenceForMs2PIP(fullSeq);
         }
 
         public static void RunPredictBatchCLI(string pythonExePath, string inputPsmPath, string psmFileType = null, string outputName = null, string outputFormat = "msp", bool addRetentionTime = false, bool addIonMobility = false, string model = "HCD", string modelDir = null, int? processes = null)

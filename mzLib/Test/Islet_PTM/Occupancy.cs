@@ -47,7 +47,7 @@ namespace Test.Islet_PTM
                     if (mod.Key != 0) modSite = modSite - 1;
                     if (mod.Key == 0 && startAA != 1) continue;
                     var modName = mod.Value.Split(':')[1].Split(' ')[0];
-                    var parsedModName = Ptm_tmt.ParseModNameForDeepLC(modName);
+                    var parsedModName =  DeepLC.ParseModNameForDeepLC(modName);
                     allPtms.Add(new PtmRecord { Accession = peptide.ProteinAccession, ModSite = modSite, Mod = parsedModName });
                 }
             }
