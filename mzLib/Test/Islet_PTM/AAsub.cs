@@ -512,6 +512,111 @@ namespace Test
             }
         }
 
+
+        [Test]
+        public static void PredictRT()
+        {
+            var sequencesForPrediction = new List<string> { "[Common Fixed:TMTpro on N-terminus]DEVAHTLTENR" };
+            var modelInputs = sequencesForPrediction.Select(s => new RetentionTimePredictionInput(s)).ToList();
+
+            var model = new Prosit2020iRTTMT();
+            var predictions = model.Predict(modelInputs);
+
+            // Print the predicted iRT for each input so you can actually see the
+            // number the model returned (and any per-prediction warning).
+            for (int i = 0; i < predictions.Count; i++)
+            {
+                var pred = predictions[i];
+            }
+        }
+
+        /// <summary>
+        /// Reads a PAW *_filtered.txt PSM table, applies TMTpro-on-N-term + TMTpro-on-K
+        /// + Carbamidomethyl-on-C fixed mods, predicts indexed retention time with
+        /// Prosit2020iRTTMT, and writes one row per input PSM keyed by scan number.
+        /// </summary>
+        [Test]
+        public static void PredictRtForPawFile()
+        {
+            var inputPath = @"E:\Islets\Brian_data\Real_islets\Frxn\PAW_rep1-2\filtered_files\02-22-26_Rep2_Frxn5_IsletDrugStudy_5uL_filtered.txt";
+            var outputPath = Path.Combine(
+                Path.GetDirectoryName(inputPath),
+                Path.GetFileNameWithoutExtension(inputPath) + "_PredictedRT.tsv");
+
+            // PAW filtered files are tab-separated with a header row. We need the
+            // MS2 scan number ("start") and the SEQUEST-style flanked sequence
+            // ("Sequence", e.g. "K.DEVAHTLTENR.V").
+            var lines = File.ReadAllLines(inputPath);
+            var header = lines[0].Split('\t');
+            int scanIdx = Array.IndexOf(header, "start");
+            int seqIdx = Array.IndexOf(header, "Sequence");
+            if (scanIdx < 0 || seqIdx < 0)
+                throw new InvalidDataException($"Missing 'start' or 'Sequence' column in {inputPath}");
+
+            // Pull (scan, flanked, baseSeq, annotated) for every row. Filter sequences
+            // Prosit can't handle: non-canonical AAs, length outside [1, 30].
+            var validAa = new HashSet<char>("ACDEFGHIKLMNPQRSTVWY");
+            var records = new List<(int scan, string flanked, string baseSeq, string annotated)>();
+            for (int i = 1; i < lines.Length; i++)
+            {
+                var parts = lines[i].Split('\t');
+                if (parts.Length <= Math.Max(scanIdx, seqIdx)) continue;
+                if (!int.TryParse(parts[scanIdx], out int scan)) continue;
+
+                string flanked = parts[seqIdx];
+                // "K.DEVAHTLTENR.V" → ["K", "DEVAHTLTENR", "V"]
+                var dotParts = flanked.Split('.');
+                if (dotParts.Length != 3) continue;
+                string baseSeq = dotParts[1];
+                if (baseSeq.Length < 1 || baseSeq.Length > 30) continue;
+                if (baseSeq.Any(c => !validAa.Contains(c))) continue;
+
+                // Annotate for Prosit2020iRTTMT:
+                //  - TMTpro on N-terminus (mandatory for this model)
+                //  - TMTpro on every K (TMT reagents tag both)
+                //  - Carbamidomethyl on every C (standard fixed mod in TMT searches)
+                // Variable Met-ox is ignored — ModsStr is empty for most rows and a
+                // single Met-ox shifts iRT far less than the scan-time spread.
+                var sb = new StringBuilder("[Common Fixed:TMTpro on N-terminus]");
+                foreach (var c in baseSeq)
+                {
+                    sb.Append(c);
+                    if (c == 'K') sb.Append("[Common Fixed:TMTpro on K]");
+                    else if (c == 'C') sb.Append("[Common Fixed:Carbamidomethyl on C]");
+                }
+                records.Add((scan, flanked, baseSeq, sb.ToString()));
+            }
+            TestContext.WriteLine($"Parsed {records.Count} predictable PSMs from {inputPath}.");
+
+            // Predict each UNIQUE annotated sequence once, then fan back out per-scan.
+            // Saves bandwidth when many PSMs share a sequence.
+            var uniqueAnnotated = records.Select(r => r.annotated).Distinct().ToList();
+            var uniqueInputs = uniqueAnnotated.Select(s => new RetentionTimePredictionInput(s)).ToList();
+            var model = new Prosit2020iRTTMT();
+            var uniquePredictions = model.Predict(uniqueInputs);
+            // Store as nullable so peptides the model rejected (null RT) round-trip
+            // safely instead of throwing on .Value.
+            var seqToPrediction = new Dictionary<string, double?>(uniqueAnnotated.Count);
+            for (int i = 0; i < uniqueAnnotated.Count; i++)
+                seqToPrediction[uniqueAnnotated[i]] = uniquePredictions[i].PredictedRetentionTime;
+
+            using (var writer = new StreamWriter(outputPath))
+            {
+                writer.WriteLine(string.Join("\t",
+                    "ScanNumber", "FlankedSequence", "BaseSequence",
+                    "AnnotatedSequence", "PredictedRT"));
+                foreach (var r in records)
+                {
+                    var rt = seqToPrediction[r.annotated];
+                    writer.WriteLine(string.Join("\t",
+                        r.scan, r.flanked, r.baseSeq, r.annotated,
+                        rt?.ToString("F4", CultureInfo.InvariantCulture) ?? ""));
+                }
+            }
+            int predicted = records.Count(r => seqToPrediction[r.annotated] != null);
+            TestContext.WriteLine($"Wrote {records.Count} rows ({predicted} with non-null RT) to {outputPath}.");
+        }
+
         [Test]
         public static void TestSpectralSimilarityAAsub()
         {

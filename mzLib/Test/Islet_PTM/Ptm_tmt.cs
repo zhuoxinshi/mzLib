@@ -10,11 +10,11 @@ using Omics;
 using System.Data.Entity.Core.Common.CommandTrees.ExpressionBuilder;
 using System.IO;
 using System.Text.RegularExpressions;
-using System.Windows.Shapes;
 using Easy.Common.Extensions;
 using PredictionClients.Koina.AbstractClasses;
 using PredictionClients.Koina.SupportedModels.RetentionTimeModels;
 using TopDownProteomics;
+using System.Globalization;
 
 namespace Test
 {
@@ -70,7 +70,7 @@ namespace Test
                 writer.WriteLine(string.Join("\t", rtColumns));
                 foreach (var peptide in allPeptidesTMT)
                 {
-                    var predictionInput = new List<RetentionTimePredictionInput> { new RetentionTimePredictionInput (peptide.FullSequence.Replace("X", "N-terminus")) };
+                    var predictionInput = new List<RetentionTimePredictionInput> { new RetentionTimePredictionInput(peptide.FullSequence.Replace("X", "N-terminus")) };
                     if (predictionInput.First().SequenceWarning != null)
                     {
                         continue;
@@ -88,7 +88,7 @@ namespace Test
                                 mod = "Phospho";
                             }
                         }
-                    } 
+                    }
                     var outString = new List<string> { peptide.FullSequence, mod, peptide.RetentionTime.ToString(), predictedRt.ToString() };
                     writer.WriteLine(string.Join("\t", outString));
                 }
@@ -334,5 +334,8 @@ namespace Test
 
             return fullSequence;
         }
+
+        
     }
 }
+
