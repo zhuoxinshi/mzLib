@@ -16,6 +16,7 @@ using MassSpectrometry;
 using Test.FileReadingTests;
 using System.Security.Cryptography.X509Certificates;
 using Omics;
+using Omics.Modifications;
 
 namespace Test.Islet_PTM
 {
@@ -1024,99 +1025,99 @@ namespace Test.Islet_PTM
         [Test]
         public static void CompareDmoVsMmPeptideCounts()
         {
-            var sspPath        = @"E:\Aneuploidy\Mistranslation_project\Mistranslation_search\DMO_data\DMO-FragPipe_ZenodoRepo\SSP_ECOLI_to_SALTY.csv";
-            var dmoPsmPath     = @"E:\Aneuploidy\Mistranslation_project\Mistranslation_search\DMO_data\DMO-FragPipe_ZenodoRepo\Results\AASubs_DMO\psm.tsv";
-            var mmModBoxPath   = @"E:\Aneuploidy\Mistranslation_project\Mistranslation_search\DMO_data\MM\ModBox\1715_max1_AllAAsubPTM\Task\AllPSMs.psmtsv";
-            var mmGptmdPath    = @"E:\Aneuploidy\Mistranslation_project\Mistranslation_search\DMO_data\MM\GPTMD\AllAAsubs_1715_noFilter\Task2-SearchTask\AllPeptides.psmtsv";
-            var outDir         = @"E:\Aneuploidy\Mistranslation_project\Mistranslation_search\DMO_data\MM\ModBox\1715_max1_AllAAsubPTM\Task";
-            const string raw1715Prefix = "2021-06-18-ECLandSALTY1_Slot1-42_1_1715";
-            const double massTol = 0.005;
-            const string allAa = "ACDEFGHIKLMNPQRSTVWY";
+            var sspPath        = @"E:\Aneuploidy\Mistranslation_project\Mistranslation_search\DMO_data\DMO-FragPipe_ZenodoRepo\SSP_ECOLI_to_SALTY.csv";                                              // FindSSP.py output — defines the ground-truth SALTY SSP peptides
+            var dmoPsmPath     = @"E:\Aneuploidy\Mistranslation_project\Mistranslation_search\DMO_data\DMO-FragPipe_ZenodoRepo\Results\AASubs_DMO\psm.tsv";                                          // FragPipe Detailed Mass Offset PSM table (covers both 1715 and 1716)
+            var mmModBoxPath   = @"E:\Aneuploidy\Mistranslation_project\Mistranslation_search\DMO_data\MM\ModBox\1715_max1_AllAAsubPTM\Task\AllPSMs.psmtsv";                                          // MetaMorpheus ModBox search of 1715 only (AllPSMs = one row per PSM)
+            var mmGptmdPath    = @"E:\Aneuploidy\Mistranslation_project\Mistranslation_search\DMO_data\MM\GPTMD\AllAAsubs_1715_noFilter\Task2-SearchTask\AllPeptides.psmtsv";                          // MetaMorpheus GPTMD post-search (AllPeptides = one row per unique peptide)
+            var outDir         = @"E:\Aneuploidy\Mistranslation_project\Mistranslation_search\DMO_data\MM\ModBox\1715_max1_AllAAsubPTM\Task";                                                          // Where all comparison TSVs land
+            const string raw1715Prefix = "2021-06-18-ECLandSALTY1_Slot1-42_1_1715";                                                                                                                    // Spectrum-ID prefix used to filter the DMO file down to 1715 only (MM only has 1715)
+            const double massTol = 0.005;                                                                                                                                                              // ±5 mDa: tight enough to discriminate, loose enough for Orbitrap rounding
+            const string allAa = "ACDEFGHIKLMNPQRSTVWY";                                                                                                                                               // 20 canonical amino acids — enumerate every from/to substitution pair
 
-            static string IL(string s) => s?.Replace('I', 'L');
+            static string IL(string s) => s?.Replace('I', 'L');                                                                                                                                        // I/L are isobaric and MS2-indistinguishable; fold both to L for set comparison
 
             // Build (from_aa, [to_aa, massShift]) lookup over ALL 20 AAs. The SSP
             // ground truth reflects real genome differences, not 1-nt-restricted
             // substitutions, so we don't apply the C/K/R rule here.
-            var subsByFrom = new Dictionary<char, List<(char to, double shift)>>();
-            foreach (var fr in allAa)
+            var subsByFrom = new Dictionary<char, List<(char to, double shift)>>();                                                                                                                    // For each source residue, the list of (target residue, mass-shift) it could become
+            foreach (var fr in allAa)                                                                                                                                                                  // 20 possible source residues
             {
-                var list = new List<(char, double)>();
-                foreach (var to in allAa)
+                var list = new List<(char, double)>();                                                                                                                                                 // Buffer for this source residue's targets
+                foreach (var to in allAa)                                                                                                                                                              // 20 possible target residues
                 {
-                    if (to == fr) continue;
-                    list.Add((to, Residue.ResidueMonoisotopicMass[to] - Residue.ResidueMonoisotopicMass[fr]));
+                    if (to == fr) continue;                                                                                                                                                            // Skip identity (not a substitution)
+                    list.Add((to, Residue.ResidueMonoisotopicMass[to] - Residue.ResidueMonoisotopicMass[fr]));                                                                                         // Δmass = mass(to) − mass(from), can be positive or negative
                 }
-                subsByFrom[fr] = list;
+                subsByFrom[fr] = list;                                                                                                                                                                 // 19 entries per source residue → 380 total pairs
             }
-            double[] ptmMasses = { 15.9949, 57.0214, 42.0106, 14.0157, 79.9663 };
-            bool IsPtm(double m) => ptmMasses.Any(p => Math.Abs(Math.Abs(m) - p) < massTol);
-            IEnumerable<char> FindSubTargets(char fromAa, double shift)
+            double[] ptmMasses = { 15.9949, 57.0214, 42.0106, 14.0157, 79.9663 };                                                                                                                      // Met-ox / Carbamidomethyl / acetyl / methyl / phospho — common PTMs to exclude from sub-shift interpretation
+            bool IsPtm(double m) => ptmMasses.Any(p => Math.Abs(Math.Abs(m) - p) < massTol);                                                                                                           // |mass| match handles both +PTM and -PTM (neutral-loss) forms
+            IEnumerable<char> FindSubTargets(char fromAa, double shift)                                                                                                                                 // Given source residue + mass shift, yield every target AA whose Δmass matches within tolerance
             {
-                if (!subsByFrom.TryGetValue(fromAa, out var list)) yield break;
-                foreach (var (to, s) in list)
-                    if (Math.Abs(s - shift) < massTol) yield return to;
+                if (!subsByFrom.TryGetValue(fromAa, out var list)) yield break;                                                                                                                        // Source residue not in lookup → no candidates
+                foreach (var (to, s) in list)                                                                                                                                                          // Walk all 19 candidates for this source
+                    if (Math.Abs(s - shift) < massTol) yield return to;                                                                                                                                // Return every target whose mass shift matches (may be 0, 1, or several — isobaric subs are rare but happen)
             }
 
             // ---------- 1) Ground truth: SALTY SSP peptide SET ----------
             // CSV row: <idx>,<BaseSeq>,[<SSP list>],<IsSSP>,[<DSP list>],<IsDSP>,<IsExact>
             // The bracketed list values contain commas — extract via regex on [...] groups.
-            var saltySspSet = new HashSet<string>(StringComparer.Ordinal);
-            var bracketRx   = new Regex(@"\[([^\]]*)\]", RegexOptions.Compiled);
-            var quotedRx    = new Regex(@"'([A-Z]+)'", RegexOptions.Compiled);
-            foreach (var line in File.ReadLines(sspPath).Skip(1))
+            var saltySspSet = new HashSet<string>(StringComparer.Ordinal);                                                                                                                              // Union of every SALTY peptide that's an SSP of some E. coli peptide
+            var bracketRx   = new Regex(@"\[([^\]]*)\]", RegexOptions.Compiled);                                                                                                                       // Matches the two Python-list columns in the SSP CSV
+            var quotedRx    = new Regex(@"'([A-Z]+)'", RegexOptions.Compiled);                                                                                                                         // Each quoted entry inside a list is one peptide string
+            foreach (var line in File.ReadLines(sspPath).Skip(1))                                                                                                                                       // Stream the CSV, skip the header row
             {
-                if (string.IsNullOrWhiteSpace(line)) continue;
-                var brackets = bracketRx.Matches(line);
-                if (brackets.Count == 0) continue;
-                foreach (Match m in quotedRx.Matches(brackets[0].Groups[1].Value))
-                    saltySspSet.Add(IL(m.Groups[1].Value));
+                if (string.IsNullOrWhiteSpace(line)) continue;                                                                                                                                         // Skip blank lines
+                var brackets = bracketRx.Matches(line);                                                                                                                                                // First bracket = SSP list, second = DSP list
+                if (brackets.Count == 0) continue;                                                                                                                                                     // Malformed row
+                foreach (Match m in quotedRx.Matches(brackets[0].Groups[1].Value))                                                                                                                     // Only iterate the SSP bracket (index 0); DSP is out of scope
+                    saltySspSet.Add(IL(m.Groups[1].Value));                                                                                                                                            // Add the SALTY peptide string (I/L folded) to the GT set
             }
 
             // ---------- 2) DMO ----------
             // 'Assigned Modifications' entries look like '7E(-14.0157), 12D(32.0415)'.
-            var dmoModRx = new Regex(@"(\d+)([A-Z])\(([-\d.]+)\)", RegexOptions.Compiled);
-            var dmoAllIdentified = new HashSet<string>(StringComparer.Ordinal);
-            var dmoSubIdentified = new HashSet<string>(StringComparer.Ordinal);
-            int dmoPsms = 0, dmoSubPsms = 0;
+            var dmoModRx = new Regex(@"(\d+)([A-Z])\(([-\d.]+)\)", RegexOptions.Compiled);                                                                                                              // Captures (position, residue, mass-shift) for each assigned mod entry
+            var dmoAllIdentified = new HashSet<string>(StringComparer.Ordinal);                                                                                                                        // Set of all unique BaseSeq DMO returned (any mod state)
+            var dmoSubIdentified = new HashSet<string>(StringComparer.Ordinal);                                                                                                                        // Set of unique POST-substitution peptide strings DMO called
+            int dmoPsms = 0, dmoSubPsms = 0;                                                                                                                                                           // Total PSM count after Q-filter, plus subset carrying ≥1 substitution
             {
-                var lines = File.ReadAllLines(dmoPsmPath);
-                var H = lines[0].Split('\t');
-                int iSpec = Array.IndexOf(H, "Spectrum");
-                int iPept = Array.IndexOf(H, "Peptide");
-                int iAsgn = Array.IndexOf(H, "Assigned Modifications");
-                int iQ    = Array.IndexOf(H, "Qvalue");
-                for (int i = 1; i < lines.Length; i++)
+                var lines = File.ReadAllLines(dmoPsmPath);                                                                                                                                             // Tab-separated PSM table; small enough to slurp
+                var H = lines[0].Split('\t');                                                                                                                                                          // Header row
+                int iSpec = Array.IndexOf(H, "Spectrum");                                                                                                                                              // Column with raw-file-prefixed scan identifier
+                int iPept = Array.IndexOf(H, "Peptide");                                                                                                                                               // Base peptide (no mods)
+                int iAsgn = Array.IndexOf(H, "Assigned Modifications");                                                                                                                                // Where substitution mass shifts live
+                int iQ    = Array.IndexOf(H, "Qvalue");                                                                                                                                                // Philosopher-reported FDR
+                for (int i = 1; i < lines.Length; i++)                                                                                                                                                 // Data rows start at index 1
                 {
-                    var f = lines[i].Split('\t');
-                    if (f.Length <= Math.Max(iAsgn, iQ)) continue;
-                    if (!f[iSpec].StartsWith(raw1715Prefix, StringComparison.Ordinal)) continue;
-                    if (!double.TryParse(f[iQ], NumberStyles.Float, CultureInfo.InvariantCulture, out double q) || q > 0.01) continue;
-                    var pep = f[iPept];
-                    dmoPsms++;
-                    dmoAllIdentified.Add(IL(pep));
-                    var asgn = f[iAsgn];
-                    if (string.IsNullOrEmpty(asgn)) continue;
-                    bool psmHadSub = false;
-                    foreach (Match mm in dmoModRx.Matches(asgn))
+                    var f = lines[i].Split('\t');                                                                                                                                                      // Tokenize this row
+                    if (f.Length <= Math.Max(iAsgn, iQ)) continue;                                                                                                                                     // Truncated row — skip
+                    if (!f[iSpec].StartsWith(raw1715Prefix, StringComparison.Ordinal)) continue;                                                                                                       // Drop 1716 PSMs — MM only searched 1715, keep comparison apples-to-apples
+                    if (!double.TryParse(f[iQ], NumberStyles.Float, CultureInfo.InvariantCulture, out double q) || q > 0.01) continue;                                                                 // 1% FDR cutoff (same as MM)
+                    var pep = f[iPept];                                                                                                                                                                // E. coli base sequence as MM identified it
+                    dmoPsms++;                                                                                                                                                                         // PSM passed all filters
+                    dmoAllIdentified.Add(IL(pep));                                                                                                                                                     // Add to "any mod state" set (used as a coverage denominator)
+                    var asgn = f[iAsgn];                                                                                                                                                               // The assigned-mods field, possibly empty
+                    if (string.IsNullOrEmpty(asgn)) continue;                                                                                                                                          // No mods → not a substitution PSM
+                    bool psmHadSub = false;                                                                                                                                                            // Did at least one entry decode to a real substitution?
+                    foreach (Match mm in dmoModRx.Matches(asgn))                                                                                                                                       // Could be 1 or more "<pos><res>(<mass>)" entries
                     {
-                        int pos = int.Parse(mm.Groups[1].Value);
-                        char res = mm.Groups[2].Value[0];
-                        double mass = double.Parse(mm.Groups[3].Value, CultureInfo.InvariantCulture);
-                        if (IsPtm(mass)) continue;
-                        if (pos < 1 || pos > pep.Length) continue;
+                        int pos = int.Parse(mm.Groups[1].Value);                                                                                                                                       // 1-based residue position
+                        char res = mm.Groups[2].Value[0];                                                                                                                                              // Residue letter at that position
+                        double mass = double.Parse(mm.Groups[3].Value, CultureInfo.InvariantCulture);                                                                                                  // Mass shift in Da
+                        if (IsPtm(mass)) continue;                                                                                                                                                     // Skip common-PTM shifts so we don't mis-call Met-ox/Carbam/etc. as substitutions
+                        if (pos < 1 || pos > pep.Length) continue;                                                                                                                                     // Out-of-bounds position — bad parse
                         // I/L tolerance on the residue check
-                        if (pep[pos - 1] != res && !("IL".IndexOf(pep[pos - 1]) >= 0 && "IL".IndexOf(res) >= 0)) continue;
-                        var targets = FindSubTargets(res, mass).ToList();
-                        if (targets.Count == 0) continue;
-                        psmHadSub = true;
-                        foreach (var to in targets)
+                        if (pep[pos - 1] != res && !("IL".IndexOf(pep[pos - 1]) >= 0 && "IL".IndexOf(res) >= 0)) continue;                                                                              // Bail unless the peptide residue at that position matches the mod's residue (or they're both I/L)
+                        var targets = FindSubTargets(res, mass).ToList();                                                                                                                              // What target residues does this (residue, mass-shift) decode to?
+                        if (targets.Count == 0) continue;                                                                                                                                              // No matching AA pair → not a substitution shift (probably unusual PTM)
+                        psmHadSub = true;                                                                                                                                                              // We commit this PSM to the substitution count
+                        foreach (var to in targets)                                                                                                                                                    // For each candidate target (usually exactly 1, occasionally several)
                         {
-                            var subbed = pep.Substring(0, pos - 1) + to + pep.Substring(pos);
-                            dmoSubIdentified.Add(IL(subbed));
+                            var subbed = pep.Substring(0, pos - 1) + to + pep.Substring(pos);                                                                                                          // Splice in the new residue → post-substitution base sequence
+                            dmoSubIdentified.Add(IL(subbed));                                                                                                                                          // Add to the unique-substituted-peptide set (I/L folded)
                         }
                     }
-                    if (psmHadSub) dmoSubPsms++;
+                    if (psmHadSub) dmoSubPsms++;                                                                                                                                                       // Count the PSM once if any of its mod entries was a substitution
                 }
             }
 
@@ -1124,75 +1125,371 @@ namespace Test.Islet_PTM
             // Both files share the BaseSeq/FullSequence/QValue/DecoyContamTarget schema
             // and emit AA-sub mods as '[1+ nucleotide substitution:X->Y on X]' inside
             // FullSequence. Same parser handles both.
-            (HashSet<string> AllId, HashSet<string> SubId, int Psms, int SubPsms) ReadMmFormat(string path)
+            (HashSet<string> AllId, HashSet<string> SubId, int Psms, int SubPsms) ReadMmFormat(string path)                                                                                            // Local function returns four parallel measures per engine
             {
-                var allId = new HashSet<string>(StringComparer.Ordinal);
-                var subId = new HashSet<string>(StringComparer.Ordinal);
-                int psms = 0, subPsms = 0;
-                var rows = new PsmFromTsvFile(path).Results
-                    .Where(p => p.QValue <= 0.01 && p.DecoyContamTarget == "T");
+                var allId = new HashSet<string>(StringComparer.Ordinal);                                                                                                                               // Unique BaseSeq across all PSMs (denominator)
+                var subId = new HashSet<string>(StringComparer.Ordinal);                                                                                                                               // Unique post-substitution peptide strings (the numerator candidates)
+                int psms = 0, subPsms = 0;                                                                                                                                                             // PSM counts
+                var rows = new PsmFromTsvFile(path).Results                                                                                                                                            // mzLib's MM PSM reader — handles either AllPSMs or AllPeptides schema
+                    .Where(p => p.QValue <= 0.01 && p.DecoyContamTarget == "T");                                                                                                                       // Same 1% FDR + target-only filter as DMO
                 foreach (var p in rows)
                 {
-                    psms++;
-                    allId.Add(IL(p.BaseSeq));
-                    if (string.IsNullOrEmpty(p.FullSequence) || !p.FullSequence.Contains("nucleotide substitution")) continue;
-                    string subbedFull;
-                    try { subbedFull = IBioPolymerWithSetMods.ParseSubstitutedFullSequence(p.FullSequence); }
-                    catch { continue; }
-                    var subbedBase = IBioPolymerWithSetMods.GetBaseSequenceFromFullSequence(subbedFull);
-                    if (string.IsNullOrEmpty(subbedBase)) continue;
-                    subPsms++;
-                    subId.Add(IL(subbedBase));
+                    psms++;                                                                                                                                                                            // PSM count after filter
+                    allId.Add(IL(p.BaseSeq));                                                                                                                                                          // Coverage denominator
+                    if (string.IsNullOrEmpty(p.FullSequence) || !p.FullSequence.Contains("nucleotide substitution")) continue;                                                                         // No sub annotation → skip
+                    string subbedFull;                                                                                                                                                                 // Will hold the FullSequence with all AA-sub annotations applied
+                    try { subbedFull = IBioPolymerWithSetMods.ParseSubstitutedFullSequence(p.FullSequence); }                                                                                          // Canonical mzLib parser — handles MM's "1+ nucleotide substitution" form
+                    catch { continue; }                                                                                                                                                                // Malformed annotation — skip rather than crash
+                    var subbedBase = IBioPolymerWithSetMods.GetBaseSequenceFromFullSequence(subbedFull);                                                                                               // Strip mod brackets → bare AA string
+                    if (string.IsNullOrEmpty(subbedBase)) continue;                                                                                                                                    // Empty result — skip
+                    subPsms++;                                                                                                                                                                         // PSM count of substitution-bearing rows
+                    subId.Add(IL(subbedBase));                                                                                                                                                         // Add I/L-folded post-sub peptide to the unique set
                 }
-                return (allId, subId, psms, subPsms);
+                return (allId, subId, psms, subPsms);                                                                                                                                                  // Hand back the four measures
             }
 
-            var (mmAllIdentified,    mmSubIdentified,    mmPsms,    mmSubPsms)    = ReadMmFormat(mmModBoxPath);
-            var (gptmdAllIdentified, gptmdSubIdentified, gptmdPsms, gptmdSubPsms) = ReadMmFormat(mmGptmdPath);
+            var (mmAllIdentified,    mmSubIdentified,    mmPsms,    mmSubPsms)    = ReadMmFormat(mmModBoxPath);                                                                                        // Apply the reader to MM ModBox
+            var (gptmdAllIdentified, gptmdSubIdentified, gptmdPsms, gptmdSubPsms) = ReadMmFormat(mmGptmdPath);                                                                                         // Apply the reader to MM GPTMD
 
             // ---------- 4) Intersect with ground truth ----------
-            var dmoInGt   = new HashSet<string>(dmoSubIdentified,   StringComparer.Ordinal); dmoInGt.IntersectWith(saltySspSet);
-            var mmInGt    = new HashSet<string>(mmSubIdentified,    StringComparer.Ordinal); mmInGt.IntersectWith(saltySspSet);
-            var gptmdInGt = new HashSet<string>(gptmdSubIdentified, StringComparer.Ordinal); gptmdInGt.IntersectWith(saltySspSet);
+            var dmoInGt   = new HashSet<string>(dmoSubIdentified,   StringComparer.Ordinal); dmoInGt.IntersectWith(saltySspSet);                                                                       // DMO's post-sub peptides that the GT set contains
+            var mmInGt    = new HashSet<string>(mmSubIdentified,    StringComparer.Ordinal); mmInGt.IntersectWith(saltySspSet);                                                                        // Same for MM ModBox
+            var gptmdInGt = new HashSet<string>(gptmdSubIdentified, StringComparer.Ordinal); gptmdInGt.IntersectWith(saltySspSet);                                                                     // Same for MM GPTMD
 
             // ---------- 5) Outputs ----------
-            File.WriteAllLines(Path.Combine(outDir, "GroundTruthSALTY_SSPs.txt"), saltySspSet.OrderBy(s => s));
-            void WriteEngineTsv(string filename, HashSet<string> sub)
+            File.WriteAllLines(Path.Combine(outDir, "GroundTruthSALTY_SSPs.txt"), saltySspSet.OrderBy(s => s));                                                                                        // Dump the GT set, one peptide per line, for reference
+            void WriteEngineTsv(string filename, HashSet<string> sub)                                                                                                                                  // Per-engine "called set" TSV with InGT True/False flag
             {
-                using var w = new StreamWriter(Path.Combine(outDir, filename));
-                w.WriteLine("SubstitutedPeptide_ILfolded\tInGroundTruth");
-                foreach (var p in sub.OrderBy(s => s))
-                    w.WriteLine($"{p}\t{saltySspSet.Contains(p)}");
+                using var w = new StreamWriter(Path.Combine(outDir, filename));                                                                                                                        // Auto-flush + dispose
+                w.WriteLine("SubstitutedPeptide_ILfolded\tInGroundTruth");                                                                                                                             // Header
+                foreach (var p in sub.OrderBy(s => s))                                                                                                                                                 // Sorted alphabetically for easy diff/inspection
+                    w.WriteLine($"{p}\t{saltySspSet.Contains(p)}");                                                                                                                                    // Each unique called sub peptide + whether GT contains it
             }
-            WriteEngineTsv("DMO_SubstitutedPeptides_in_GT.tsv",       dmoSubIdentified);
-            WriteEngineTsv("MM_ModBox_SubstitutedPeptides_in_GT.tsv", mmSubIdentified);
-            WriteEngineTsv("MM_GPTMD_SubstitutedPeptides_in_GT.tsv",  gptmdSubIdentified);
+            WriteEngineTsv("DMO_SubstitutedPeptides_in_GT.tsv",       dmoSubIdentified);                                                                                                               // DMO output
+            WriteEngineTsv("MM_ModBox_SubstitutedPeptides_in_GT.tsv", mmSubIdentified);                                                                                                                // MM ModBox output
+            WriteEngineTsv("MM_GPTMD_SubstitutedPeptides_in_GT.tsv",  gptmdSubIdentified);                                                                                                             // MM GPTMD output
 
-            using (var w = new StreamWriter(Path.Combine(outDir, "EngineComparison_PeptideCounts.tsv")))
+            using (var w = new StreamWriter(Path.Combine(outDir, "EngineComparison_PeptideCounts.tsv")))                                                                                                // Summary table; columns = engines, rows = metrics
             {
-                w.WriteLine("Metric\tDMO\tMM_ModBox\tMM_GPTMD");
-                w.WriteLine($"TotalPSMs\t{dmoPsms}\t{mmPsms}\t{gptmdPsms}");
-                w.WriteLine($"PSMsWithSubstitution\t{dmoSubPsms}\t{mmSubPsms}\t{gptmdSubPsms}");
-                w.WriteLine($"UniqueBaseSeqIdentified_anyMod\t{dmoAllIdentified.Count}\t{mmAllIdentified.Count}\t{gptmdAllIdentified.Count}");
-                w.WriteLine($"UniquePostSubPeptidesCalled\t{dmoSubIdentified.Count}\t{mmSubIdentified.Count}\t{gptmdSubIdentified.Count}");
-                w.WriteLine($"UniquePostSubPeptidesInGroundTruth\t{dmoInGt.Count}\t{mmInGt.Count}\t{gptmdInGt.Count}");
-                w.WriteLine($"GroundTruthUniverseSize\t{saltySspSet.Count}\t{saltySspSet.Count}\t{saltySspSet.Count}");
+                w.WriteLine("Metric\tDMO\tMM_ModBox\tMM_GPTMD");                                                                                                                                       // Header
+                w.WriteLine($"TotalPSMs\t{dmoPsms}\t{mmPsms}\t{gptmdPsms}");                                                                                                                           // PSMs after Q-filter (any mod state)
+                w.WriteLine($"PSMsWithSubstitution\t{dmoSubPsms}\t{mmSubPsms}\t{gptmdSubPsms}");                                                                                                       // PSMs that carry a substitution call
+                w.WriteLine($"UniqueBaseSeqIdentified_anyMod\t{dmoAllIdentified.Count}\t{mmAllIdentified.Count}\t{gptmdAllIdentified.Count}");                                                         // Coverage of the proteome (denominator-like)
+                w.WriteLine($"UniquePostSubPeptidesCalled\t{dmoSubIdentified.Count}\t{mmSubIdentified.Count}\t{gptmdSubIdentified.Count}");                                                            // Unique substituted-peptide STRINGS — the main per-engine "called" set
+                w.WriteLine($"UniquePostSubPeptidesInGroundTruth\t{dmoInGt.Count}\t{mmInGt.Count}\t{gptmdInGt.Count}");                                                                                // The headline metric — recovered GT SSPs
+                w.WriteLine($"GroundTruthUniverseSize\t{saltySspSet.Count}\t{saltySspSet.Count}\t{saltySspSet.Count}");                                                                                // Total achievable — same on every column
 
                 // Pairwise + triple overlap on GT-matching peptides
-                var dm = new HashSet<string>(dmoInGt, StringComparer.Ordinal);    dm.IntersectWith(mmInGt);
-                var dg = new HashSet<string>(dmoInGt, StringComparer.Ordinal);    dg.IntersectWith(gptmdInGt);
-                var mg = new HashSet<string>(mmInGt,  StringComparer.Ordinal);    mg.IntersectWith(gptmdInGt);
-                var all3 = new HashSet<string>(dm, StringComparer.Ordinal);       all3.IntersectWith(gptmdInGt);
-                w.WriteLine($"Overlap_DMOandModBox\t{dm.Count}\t{dm.Count}\t-");
+                var dm = new HashSet<string>(dmoInGt, StringComparer.Ordinal);    dm.IntersectWith(mmInGt);                                                                                            // DMO ∩ MM(ModBox)
+                var dg = new HashSet<string>(dmoInGt, StringComparer.Ordinal);    dg.IntersectWith(gptmdInGt);                                                                                         // DMO ∩ MM(GPTMD)
+                var mg = new HashSet<string>(mmInGt,  StringComparer.Ordinal);    mg.IntersectWith(gptmdInGt);                                                                                         // MM(ModBox) ∩ MM(GPTMD)
+                var all3 = new HashSet<string>(dm, StringComparer.Ordinal);       all3.IntersectWith(gptmdInGt);                                                                                       // Triple overlap = high-confidence consensus call set
+                w.WriteLine($"Overlap_DMOandModBox\t{dm.Count}\t{dm.Count}\t-");                                                                                                                       // Pair counts written twice so the column under each engine matches
                 w.WriteLine($"Overlap_DMOandGPTMD\t{dg.Count}\t-\t{dg.Count}");
                 w.WriteLine($"Overlap_ModBoxandGPTMD\t-\t{mg.Count}\t{mg.Count}");
-                w.WriteLine($"Overlap_AllThree\t{all3.Count}\t{all3.Count}\t{all3.Count}");
+                w.WriteLine($"Overlap_AllThree\t{all3.Count}\t{all3.Count}\t{all3.Count}");                                                                                                            // Triple overlap broadcast across all three columns
 
                 // Engine-only GT hits (relative to the other two engines)
-                var dmoOnly   = new HashSet<string>(dmoInGt,   StringComparer.Ordinal); dmoOnly.ExceptWith(mmInGt); dmoOnly.ExceptWith(gptmdInGt);
-                var mmOnly    = new HashSet<string>(mmInGt,    StringComparer.Ordinal); mmOnly.ExceptWith(dmoInGt); mmOnly.ExceptWith(gptmdInGt);
-                var gptmdOnly = new HashSet<string>(gptmdInGt, StringComparer.Ordinal); gptmdOnly.ExceptWith(dmoInGt); gptmdOnly.ExceptWith(mmInGt);
-                w.WriteLine($"EngineUnique_GTHits\t{dmoOnly.Count}\t{mmOnly.Count}\t{gptmdOnly.Count}");
+                var dmoOnly   = new HashSet<string>(dmoInGt,   StringComparer.Ordinal); dmoOnly.ExceptWith(mmInGt); dmoOnly.ExceptWith(gptmdInGt);                                                     // GT hits only DMO found
+                var mmOnly    = new HashSet<string>(mmInGt,    StringComparer.Ordinal); mmOnly.ExceptWith(dmoInGt); mmOnly.ExceptWith(gptmdInGt);                                                      // GT hits only MM ModBox found
+                var gptmdOnly = new HashSet<string>(gptmdInGt, StringComparer.Ordinal); gptmdOnly.ExceptWith(dmoInGt); gptmdOnly.ExceptWith(mmInGt);                                                   // GT hits only MM GPTMD found
+                w.WriteLine($"EngineUnique_GTHits\t{dmoOnly.Count}\t{mmOnly.Count}\t{gptmdOnly.Count}");                                                                                               // Three engine-unique counts on one row
+            }
+        }
+
+        /// <summary>
+        /// For each MetaMorpheus PSM carrying an AA-substitution annotation
+        /// (<c>[1+ nucleotide substitution:X->Y on X]</c> inside FullSequence), check
+        /// whether the substitution's residue mass shift Δm = mass(Y) − mass(X) could
+        /// instead be explained by a user-specified common PTM applied to residue X.
+        ///
+        /// Following Mordret et al. (Mol. Cell 2019, "Systematic Detection of Amino
+        /// Acid Substitutions in Proteomes ...", https://www.sciencedirect.com/science/article/pii/S1097276519304988),
+        /// a PTM "explains" the shift only when BOTH:
+        ///   1) the PTM's monoisotopic mass matches Δm within tolerance, AND
+        ///   2) the PTM's motif/site (Target uppercase residue) and LocationRestriction
+        ///      are compatible with the substitution site — e.g. Phosphorylation
+        ///      (+79.9663) on S/T only flags S→? and T→? subs whose mass shift lands
+        ///      at +79.9663; an N-terminal-restricted PTM only flags subs at peptide
+        ///      (or protein) N-terminus.
+        ///
+        /// PTMs are pulled from mzLib's bundled Mods.txt by ID (caller-supplied list).
+        ///
+        /// When an SSP ground-truth CSV is provided (FindSSP.py output —
+        /// SSP_ECOLI_to_SALTY.csv for the 1715 ECLandSALTY co-lysate), the test also
+        /// reports per-substitution TP/FP counts BEFORE and AFTER the filter. The
+        /// "true substitution" set is the union of every SALTY SSP sequence; a
+        /// substitution annotation is a TP if its singly-substituted peptide
+        /// (I/L folded) is in that set, else a FP ("nonSSP" call, in the paper's
+        /// terms). This mirrors the false-positive comparison in Mordret et al.
+        ///
+        /// Writes next to the PSM file:
+        ///   <c>{stem}_AaSubFiltered_kept.tsv</c>      — substitutions that survived
+        ///   <c>{stem}_AaSubFiltered_dropped.tsv</c>   — substitutions explained by a common PTM
+        ///   <c>{stem}_AaSubFiltered_summary.tsv</c>   — TP/FP counts before vs after
+        /// </summary>
+        [Test]
+        public static void FilterMmAaSubsByCommonPtmMassAndMotif()
+        {
+            // ---- Inputs --------------------------------------------------------
+            var mmPsmPath = @"E:\Aneuploidy\Mistranslation_project\Mistranslation_search\DMO_data\MM\ModBox\1715_max1_AllAAsubPTM\Task\AllPSMs.psmtsv";
+            // Optional — set to "" to skip the TP/FP comparison block. FindSSP.py
+            // output defines the SALTY SSP peptides we treat as the "true" sub set.
+            var sspGroundTruthCsv = @"E:\Aneuploidy\Mistranslation_project\Mistranslation_search\DMO_data\DMO-FragPipe_ZenodoRepo\SSP_ECOLI_to_SALTY.csv";
+            // Caller-supplied "common PTMs" by Mods.txt ID. Anything here, when
+            // matched on BOTH mass AND motif, is treated as a confounding PTM and
+            // the corresponding AA-sub call is removed.
+            var commonPtmIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "Phosphorylation",
+                "Oxidation on M",
+                "Acetylation",
+                "Methylation",
+                "Carbamidomethyl",
+            };
+            // mzLib ships a Mods.txt with Anywhere/N-term/C-term/Protein-term entries already annotated — reuse instead of hand-rolling a PTM table.
+            var modsTxtPath = Path.Combine(
+                TestContext.CurrentContext.TestDirectory, "..", "..", "..", "..",
+                "Omics", "Resources", "Mods.txt");
+            modsTxtPath = Path.GetFullPath(modsTxtPath);
+            const double massTol = 0.005;
+
+            // ---- Load the common PTM rows (one Modification per site/term entry) - A single PTM ID (e.g. "Phosphorylation") may expand to several rows
+            // because Mods.txt splits by Target and LocationRestriction (S/T vs Y, Anywhere vs N-terminal, ...). Keep them all so each combination is tested independently.
+            var allMods = PtmListLoader.ReadModsFromFile(modsTxtPath, out _).ToList();
+            var commonPtms = allMods
+                .Where(m => m.OriginalId != null && commonPtmIds.Contains(m.OriginalId)
+                            && m.MonoisotopicMass.HasValue && m.Target != null)
+                .ToList();
+            TestContext.WriteLine($"Loaded {commonPtms.Count} common-PTM rows covering {commonPtms.Select(m => m.OriginalId).Distinct().Count()} distinct PTM IDs.");
+            Assert.That(commonPtms, Is.Not.Empty, "No common PTMs matched the supplied IDs in Mods.txt.");
+
+            // ---- Walk a FullSequence and extract every embedded sub annotation --
+            // Returns (position1Based, originalAa, substitutedAa) for each [N+ nucleotide substitution:X->Y on Z] tag. The position is the index
+            // of the most-recently-seen base-sequence residue at the time the bracket opens — that's the residue carrying the sub annotation.
+            var subRx = new Regex(@"^\d+\+?\s*nucleotide substitution:\s*([A-Z])->([A-Z]) on ([A-Z])$", RegexOptions.Compiled);
+            static IEnumerable<(int pos1, char from, char to)> ExtractSubs(string fullSeq, Regex rx)
+            {
+                if (string.IsNullOrEmpty(fullSeq)) yield break;
+                int basePos = 0;
+                for (int i = 0; i < fullSeq.Length; i++)
+                {
+                    char c = fullSeq[i];
+                    if (c == '[')
+                    {
+                        int close = fullSeq.IndexOf(']', i + 1);
+                        if (close < 0) yield break;
+                        var content = fullSeq.Substring(i + 1, close - i - 1);
+                        var m = rx.Match(content);
+                        if (m.Success && basePos >= 1)
+                            yield return (basePos, m.Groups[1].Value[0], m.Groups[2].Value[0]);
+                        i = close;
+                    }
+                    else if (c >= 'A' && c <= 'Z')
+                    {
+                        basePos++;
+                    }
+                    // dashes, digits, lowercase tags inside brackets are skipped
+                }
+            }
+
+            // ---- PTM compatibility predicate (mass + motif + location) ----------
+            // peptideLength is needed to test C-terminal restrictions; pepIsProtNterm
+            // / pepIsProtCterm distinguish "Protein N-terminal" from peptide N-term.
+            static bool PtmCompatible(Modification ptm, double deltaMass, char originalAa,
+                int subPos1Based, int peptideLength,
+                bool pepIsProtNterm, bool pepIsProtCterm, double tol)
+            {
+                if (!ptm.MonoisotopicMass.HasValue) return false;
+                if (Math.Abs(ptm.MonoisotopicMass.Value - deltaMass) > tol) return false;
+
+                // Motif: the only uppercase letter in the Target string is the AA
+                // the PTM targets. The substitution's original residue must equal it.
+                var motif = ptm.Target?.ToString();
+                if (string.IsNullOrEmpty(motif)) return false;
+                char target = motif.First(char.IsUpper);
+                // 'X' in Mods.txt motifs means "any residue" (used for terminal mods
+                // like N-terminal acetylation that don't care about identity).
+                if (target != 'X' && target != originalAa) return false;
+
+                // Location restriction. Mods.txt uses trailing period — normalize.
+                var loc = (ptm.LocationRestriction ?? "Anywhere.").TrimEnd('.');
+                switch (loc)
+                {
+                    case "Anywhere": return true;
+                    case "N-terminal": return subPos1Based == 1;
+                    case "C-terminal": return subPos1Based == peptideLength;
+                    case "Peptide N-terminal": return subPos1Based == 1;
+                    case "Peptide C-terminal": return subPos1Based == peptideLength;
+                    case "Protein N-terminal": return subPos1Based == 1 && pepIsProtNterm;
+                    case "Protein C-terminal": return subPos1Based == peptideLength && pepIsProtCterm;
+                    default: return false; // Unassigned. or unknown → don't filter
+                }
+            }
+
+            // ---- Iterate PSMs --------------------------------------------------
+            var psms = new PsmFromTsvFile(mmPsmPath).Results
+                .Where(p => p.QValue <= 0.01 && p.DecoyContamTarget == "T"
+                         && p.FullSequence != null && p.FullSequence.Contains("nucleotide substitution"))
+                .ToList();
+
+            var outDir = Path.GetDirectoryName(mmPsmPath) ?? ".";
+            var stem = Path.GetFileNameWithoutExtension(mmPsmPath);
+            var keptPath = Path.Combine(outDir, $"{stem}_AaSubFiltered_kept.tsv");
+            var droppedPath = Path.Combine(outDir, $"{stem}_AaSubFiltered_dropped.tsv");
+            var summaryPath = Path.Combine(outDir, $"{stem}_AaSubFiltered_summary.tsv");
+
+            // ---- Optional: load SSP ground truth for TP/FP comparison ---------
+            // Row layout: <idx>,<EcoliBaseSeq>,[<SSP list>],<IsSSP>,[<DSP list>],<IsDSP>,<IsExact>
+            // The bracket lists contain commas, so we regex out the [...] groups.
+            // I/L is folded everywhere — same convention as the existing SSP tests.
+            static string IL(string s) => s?.Replace('I', 'L');
+            HashSet<string> saltySspSet = null;
+            if (!string.IsNullOrEmpty(sspGroundTruthCsv) && File.Exists(sspGroundTruthCsv))
+            {
+                saltySspSet = new HashSet<string>(StringComparer.Ordinal);
+                var bracketRx = new Regex(@"\[([^\]]*)\]", RegexOptions.Compiled);
+                var quotedRx = new Regex(@"'([A-Z]+)'", RegexOptions.Compiled);
+                foreach (var line in File.ReadLines(sspGroundTruthCsv).Skip(1))
+                {
+                    if (string.IsNullOrWhiteSpace(line)) continue;
+                    var brackets = bracketRx.Matches(line);
+                    if (brackets.Count == 0) continue;
+                    foreach (Match m in quotedRx.Matches(brackets[0].Groups[1].Value))
+                        saltySspSet.Add(IL(m.Groups[1].Value));
+                }
+                TestContext.WriteLine($"Loaded {saltySspSet.Count} unique SALTY SSP peptides from {sspGroundTruthCsv}");
+            }
+            else
+            {
+                TestContext.WriteLine("No SSP ground-truth CSV provided — skipping TP/FP block.");
+            }
+
+            // For protein-terminus checks, parse "1 to N" out of StartAndEndResiduesInProtein.
+            var posRx = new Regex(@"(\d+)\s+to\s+(\d+)", RegexOptions.Compiled);
+
+            // Counters split four ways: kept vs dropped, GT-hit vs GT-miss. Only the
+            // last two are meaningful when the SSP set is loaded. "TP" here means
+            // the singly-substituted peptide for this annotation is in the SALTY
+            // SSP set; "FP" (= the paper's "nonSSP") means it isn't.
+            int kept = 0, dropped = 0;
+            int keptTp = 0, keptFp = 0, droppedTp = 0, droppedFp = 0;
+            using var keptWriter = new StreamWriter(keptPath);
+            using var dropWriter = new StreamWriter(droppedPath);
+            string tpCol = saltySspSet != null ? "\tInSspGroundTruth" : "";
+            keptWriter.WriteLine("BaseSeq\tFullSequence\tSubPosInPeptide\tFromAa\tToAa\tDeltaMass\tSubstitutedPeptide\tScore\tQValue\tProteinAccession\tStartAndEnd" + tpCol);
+            dropWriter.WriteLine("BaseSeq\tFullSequence\tSubPosInPeptide\tFromAa\tToAa\tDeltaMass\tSubstitutedPeptide\tMatchedPtms\tScore\tQValue\tProteinAccession\tStartAndEnd" + tpCol);
+
+            foreach (var psm in psms)
+            {
+                var subs = ExtractSubs(psm.FullSequence, subRx).ToList();
+                if (subs.Count == 0) continue;
+
+                // Pre-compute peptide context for terminus restrictions.
+                int pepLen = psm.BaseSeq?.Length ?? 0;
+                bool pepIsProtNterm = false, pepIsProtCterm = false;
+                var pm = posRx.Match(psm.StartAndEndResiduesInProtein ?? "");
+                if (pm.Success)
+                {
+                    pepIsProtNterm = int.Parse(pm.Groups[1].Value) == 1;
+                    // We don't have protein length here, so leave protein-C-term false
+                    // unless explicitly stated; conservative — protein-C-term-restricted
+                    // PTMs simply won't fire, which is the safer default.
+                    pepIsProtCterm = false;
+                }
+
+                foreach (var (pos1, from, to) in subs)
+                {
+                    double deltaMass = Residue.ResidueMonoisotopicMass[(int)to]
+                                     - Residue.ResidueMonoisotopicMass[(int)from];
+
+                    // Singly-substituted peptide: splice ONLY this sub into the
+                    // original base seq. Used both for the ground-truth check and
+                    // for the output column (so the user can audit calls by eye).
+                    string subbedPep = "";
+                    if (!string.IsNullOrEmpty(psm.BaseSeq) && pos1 >= 1 && pos1 <= psm.BaseSeq.Length)
+                        subbedPep = psm.BaseSeq.Substring(0, pos1 - 1) + to + psm.BaseSeq.Substring(pos1);
+
+                    bool? inGt = saltySspSet != null && !string.IsNullOrEmpty(subbedPep)
+                        ? saltySspSet.Contains(IL(subbedPep))
+                        : (bool?)null;
+                    string inGtCol = inGt.HasValue ? $"\t{inGt.Value}" : "";
+
+                    var matched = commonPtms
+                        .Where(m => PtmCompatible(m, deltaMass, from, pos1, pepLen,
+                                                  pepIsProtNterm, pepIsProtCterm, massTol))
+                        .Select(m => $"{m.OriginalId}({m.LocationRestriction}/{m.Target})")
+                        .Distinct()
+                        .ToList();
+
+                    if (matched.Count > 0)
+                    {
+                        dropWriter.WriteLine(string.Join("\t",
+                            psm.BaseSeq, psm.FullSequence, pos1, from, to,
+                            deltaMass.ToString("F4", CultureInfo.InvariantCulture),
+                            subbedPep,
+                            string.Join(";", matched),
+                            psm.Score.ToString("F2", CultureInfo.InvariantCulture),
+                            psm.QValue.ToString("G", CultureInfo.InvariantCulture),
+                            psm.ProteinAccession ?? "",
+                            psm.StartAndEndResiduesInProtein ?? "") + inGtCol);
+                        dropped++;
+                        if (inGt == true) droppedTp++;
+                        else if (inGt == false) droppedFp++;
+                    }
+                    else
+                    {
+                        keptWriter.WriteLine(string.Join("\t",
+                            psm.BaseSeq, psm.FullSequence, pos1, from, to,
+                            deltaMass.ToString("F4", CultureInfo.InvariantCulture),
+                            subbedPep,
+                            psm.Score.ToString("F2", CultureInfo.InvariantCulture),
+                            psm.QValue.ToString("G", CultureInfo.InvariantCulture),
+                            psm.ProteinAccession ?? "",
+                            psm.StartAndEndResiduesInProtein ?? "") + inGtCol);
+                        kept++;
+                        if (inGt == true) keptTp++;
+                        else if (inGt == false) keptFp++;
+                    }
+                }
+            }
+
+            TestContext.WriteLine($"Substitution annotations evaluated: {kept + dropped} (kept={kept}, dropped={dropped})");
+            TestContext.WriteLine($"  kept    → {keptPath}");
+            TestContext.WriteLine($"  dropped → {droppedPath}");
+
+            // ---- TP/FP summary (only when ground-truth was loaded) -------------
+            if (saltySspSet != null)
+            {
+                int preTp = keptTp + droppedTp;
+                int preFp = keptFp + droppedFp;
+                int preTotal = preTp + preFp;
+                int postTp = keptTp;
+                int postFp = keptFp;
+                int postTotal = postTp + postFp;
+
+                static double Pct(int num, int den) => den == 0 ? 0 : 100.0 * num / den;
+
+                using (var w = new StreamWriter(summaryPath))
+                {
+                    w.WriteLine("Metric\tPreFilter\tPostFilter\tDelta");
+                    w.WriteLine($"TotalSubstitutions\t{preTotal}\t{postTotal}\t{postTotal - preTotal}");
+                    w.WriteLine($"TPs_inSSP\t{preTp}\t{postTp}\t{postTp - preTp}");
+                    w.WriteLine($"FPs_nonSSP\t{preFp}\t{postFp}\t{postFp - preFp}");
+                    w.WriteLine($"FPRate_pct\t{Pct(preFp, preTotal):F2}\t{Pct(postFp, postTotal):F2}\t{Pct(postFp, postTotal) - Pct(preFp, preTotal):F2}");
+                    w.WriteLine($"TPRate_pct\t{Pct(preTp, preTotal):F2}\t{Pct(postTp, postTotal):F2}\t{Pct(postTp, postTotal) - Pct(preTp, preTotal):F2}");
+                    w.WriteLine();
+                    w.WriteLine("FilterAccountingMetric\tCount\tPctOfDropped");
+                    w.WriteLine($"Dropped_TPs(true subs lost)\t{droppedTp}\t{Pct(droppedTp, dropped):F2}");
+                    w.WriteLine($"Dropped_FPs(common-PTM masquerades removed)\t{droppedFp}\t{Pct(droppedFp, dropped):F2}");
+                    w.WriteLine($"FilterPrecision_pct(Dropped_FPs/Dropped_All)\t{Pct(droppedFp, dropped):F2}\t");
+                }
+
+                TestContext.WriteLine("TP/FP comparison vs SALTY SSP ground truth:");
+                TestContext.WriteLine($"  Pre-filter : total={preTotal}  TP={preTp}  FP={preFp}  FP%={Pct(preFp, preTotal):F2}");
+                TestContext.WriteLine($"  Post-filter: total={postTotal}  TP={postTp}  FP={postFp}  FP%={Pct(postFp, postTotal):F2}");
+                TestContext.WriteLine($"  Filter accounting: dropped {droppedFp} FPs and {droppedTp} TPs (precision {Pct(droppedFp, dropped):F2}%)");
+                TestContext.WriteLine($"  summary → {summaryPath}");
             }
         }
 
