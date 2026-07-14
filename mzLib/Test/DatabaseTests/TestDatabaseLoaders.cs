@@ -1394,17 +1394,17 @@ namespace Test.DatabaseTests
         [Test]
         public static void TIC()
         {
-            var directory = @"E:\Aneuploidy\Mistranslation_project\011626\061226_TMT2";
+            var directory = @"E:\Aneuploidy\Mistranslation_project\High-pH\250530_high-pH";
             var islet_dir = @"E:\Islets\Brian_data\Real_islets\Frxn";
             var standard = @"E:\Aneuploidy\Mistranslation_project\011626\040326_IS_test\04-14-26_std-YL.raw";
-            var files = Directory.GetFiles(directory, "06-22-26*").ToList();
+            var files = Directory.GetFiles(directory, "*.raw").ToList();
             var fileList2 = new List<string> { @"E:\Aneuploidy\Mistranslation_project\011626\061226_TMT2\06-16-26_TMT2_R2-R3_testMix.raw", @"E:\Aneuploidy\Mistranslation_project\011626\061226_TMT2\06-17-26_TMT2_R5-R6_testMix.raw" };
             var ticAreas = new Dictionary<string, string>();
             //files.Add(standard);
             foreach (var file in files)
             {
                 var dataFile = MsDataFileReader.GetDataFile(file);
-                var ms1TicArea = dataFile.GetMS1Scans().Where(s => s.RetentionTime >= 20 && s.RetentionTime <= 130).Sum(s => s.TotalIonCurrent);
+                var ms1TicArea = dataFile.GetMS1Scans().Where(s => s.RetentionTime >= 40 && s.RetentionTime <= 120).Sum(s => s.TotalIonCurrent);
                 ticAreas[file] = $"{ms1TicArea:E2}";
             }
         }
