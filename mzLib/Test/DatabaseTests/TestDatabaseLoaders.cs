@@ -1394,7 +1394,7 @@ namespace Test.DatabaseTests
         [Test]
         public static void TIC()
         {
-            var directory = @"E:\Aneuploidy\Mistranslation_project\High-pH\250530_high-pH";
+            var directory = @"E:\ISD Project\ISD_250906\temp_duplicate";
             var islet_dir = @"E:\Islets\Brian_data\Real_islets\Frxn";
             var standard = @"E:\Aneuploidy\Mistranslation_project\011626\040326_IS_test\04-14-26_std-YL.raw";
             var files = Directory.GetFiles(directory, "*.raw").ToList();
@@ -1404,7 +1404,7 @@ namespace Test.DatabaseTests
             foreach (var file in files)
             {
                 var dataFile = MsDataFileReader.GetDataFile(file);
-                var ms1TicArea = dataFile.GetMS1Scans().Where(s => s.RetentionTime >= 40 && s.RetentionTime <= 120).Sum(s => s.TotalIonCurrent);
+                var ms1TicArea = dataFile.GetMS1Scans().Where(s => s.RetentionTime >= 10 && s.RetentionTime <= 50).Sum(s => s.TotalIonCurrent);
                 ticAreas[file] = $"{ms1TicArea:E2}";
             }
         }
