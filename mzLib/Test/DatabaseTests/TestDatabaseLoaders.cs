@@ -1394,17 +1394,17 @@ namespace Test.DatabaseTests
         [Test]
         public static void TIC()
         {
-            var directory = @"E:\ISD Project\ISD_250906\temp_duplicate";
+            var directory = @"E:\ISD Project\071626_ISD\Quant\HC_YC";
             var islet_dir = @"E:\Islets\Brian_data\Real_islets\Frxn";
             var standard = @"E:\Aneuploidy\Mistranslation_project\011626\040326_IS_test\04-14-26_std-YL.raw";
-            var files = Directory.GetFiles(directory, "*.raw").ToList();
+            var files = Directory.GetFiles(directory, "07-23-26_HC-YC_1-1*").ToList();
             var fileList2 = new List<string> { @"E:\Aneuploidy\Mistranslation_project\011626\061226_TMT2\06-16-26_TMT2_R2-R3_testMix.raw", @"E:\Aneuploidy\Mistranslation_project\011626\061226_TMT2\06-17-26_TMT2_R5-R6_testMix.raw" };
             var ticAreas = new Dictionary<string, string>();
             //files.Add(standard);
             foreach (var file in files)
             {
                 var dataFile = MsDataFileReader.GetDataFile(file);
-                var ms1TicArea = dataFile.GetMS1Scans().Where(s => s.RetentionTime >= 10 && s.RetentionTime <= 50).Sum(s => s.TotalIonCurrent);
+                var ms1TicArea = dataFile.GetMS1Scans().Where(s => s.RetentionTime >= 5 && s.RetentionTime <= 60).Sum(s => s.TotalIonCurrent);
                 ticAreas[file] = $"{ms1TicArea:E2}";
             }
         }
@@ -1427,6 +1427,18 @@ namespace Test.DatabaseTests
             var isletMassErrors = isletPsms.SelectMany(p => p.MatchedIons.Select(i => i.MassErrorDa)).ToList();
             var myPsms = new PsmFromTsvFile(myData).Results.Where(p => p.DecoyContamTarget == "T" && p.QValue <= 0.01).ToList();
             var myMassErrors = myPsms.SelectMany(p => p.MatchedIons.Select(i => i.MassErrorDa)).ToList();
+        }
+
+        [Test]
+        public static void ConcatDbs()
+        {
+            var yeast_xml = @"E:\Databases\uniprotkb_taxonomy_id_559292_AND_review_2024_08_16.xml";
+            var human_xml = @"E:\Databases\uniprotkb_taxonomy_id_9606_AND_reviewed_2026_07_23.xml";
+            var yeast_proteins = ProteinDbLoader.LoadProteinXML(yeast_xml, true, DecoyType.None, new List<Modification>(), false, new List<string>(), out var errors);
+            var human_proteins = ProteinDbLoader.LoadProteinXML(human_xml, true, DecoyType.None, new List<Modification>(), false, new List<string>(), out var errors2);
+            var combined = yeast_proteins.Concat(human_proteins).ToList();
+            var combinedPath = @"E:\Databases\yeast_human_combined.xml";
+            ProteinDbWriter.WriteXmlDatabase(new Dictionary<string, HashSet<Tuple<int, Modification>>>(), combined, combinedPath);
         }
     }
 }
