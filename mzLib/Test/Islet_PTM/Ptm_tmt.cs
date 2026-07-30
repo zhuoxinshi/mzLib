@@ -25,11 +25,11 @@ namespace Test
         {
             var notInteresting = new List<string> { "TMT18", "Fixed", "Artifact", "Variable", "Metal" };
 
-            var allPeptidesHigh_path = @"E:\Islets\Brian_data\HighResTMT\noCali_LFgptmdFilterPruned\Task1-SearchTask\AllPeptides.psmtsv";
+            var allPeptidesHigh_path = @"E:\Fly_TMT\MM\calied_gptmd_secondPass\Task2-SearchTask\AllPeptides.psmtsv";
             var allPeptidesHigh_file = new PsmFromTsvFile(allPeptidesHigh_path);
             var allPeptidesHigh = allPeptidesHigh_file.Results.Where(p => p.QValue <= 0.01 && p.DecoyContamTarget == "T");
             var allPeptidesNoModHigh = allPeptidesHigh.Where(p => !SpectrumMatchFromTsv.ParseModifications(p.FullSequence).Values.Any(v => v.Contains("Fixed") || v.Contains("Variable") || v.Contains("TMT")) && !p.FullSequence.Contains("|"));
-            var allPeptidesWithModsHigh = allPeptidesHigh.Where(p => SpectrumMatchFromTsv.ParseModifications(p.FullSequence).Values.Any(v => !notInteresting.Any(key => v.Contains(key))) || p.Description.Contains("chain")).ToList();
+            var allPeptidesWithModsHigh = allPeptidesHigh.Where(p => SpectrumMatchFromTsv.ParseModifications(p.FullSequence).Values.Any(v => !notInteresting.Any(key => v.Contains(key)))).ToList();
 
             var allPeptidesLow_path = @"E:\Islets\Brian_data\Real_islets\Frxn\All_LFgptmdFilterPrunedDb\Task1-SearchTask\AllPeptides.psmtsv";
             var allPeptidesLow_file = new PsmFromTsvFile(allPeptidesLow_path);
@@ -132,6 +132,48 @@ namespace Test
                     writer.WriteLine(string.Join("\t", outString));
                 }
             }
+        }
+
+        [Test]
+        public static void TMT_SumPsms_multiPlates()
+        {
+            var dir = @"E:\Aneuploidy\Mistranslation_project\011626\042426_TMT\UPLC\MM\LFgptmdPrunedDb_search-cali-search\Task1-SearchTask";
+            var individualDir = @"E:\Aneuploidy\Mistranslation_project\011626\042426_TMT\UPLC\MM\LFgptmdPrunedDb_search-cali-search\Task1-SearchTask\Individual File Results";
+            var allIndividualFiles = Directory.GetFiles(individualDir, "*PSMs.psmtsv", SearchOption.AllDirectories);
+            var allPsms = @"E:\Aneuploidy\Mistranslation_project\011626\042426_TMT\UPLC\MM\LFgptmdPrunedDb_search-cali-search\Task1-SearchTask\AllPSMs.psmtsv";
+            var allPsms_file = new PsmFromTsvFile(allPsms);
+            var filteredPsms = allPsms_file.Results.Where(p => p.QValue <= 0.01 && p.DecoyContamTarget == "T");
+            var keys = new List<string> { "R2-R3", "R4-R5", "R6-R7"};
+
+            var columns = new List<string> { "BaseSequence", "FullSequence", "Protein Accession", "Protein Name", "GeneName", "Description", "Start_and_End_Residues" };
+            var labels = new List<string> { "126", "127N", "127C", "128N", "128C", "129N", "129C", "130N", "130C", "131N", "131C", "132N", "132C", "133N", "133C", "134N", "134C", "135N" };
+
+            foreach (var key in keys)
+            {
+                var psmsForKey = filteredPsms.Where(p => p.FileName.Contains(key));
+                string outPath = Path.Combine(dir, $"Peptide_quant_{key}.tsv");
+                using (StreamWriter writer = new StreamWriter(outPath))
+                {
+                    writer.WriteLine(string.Join("\t", columns));
+                    var peptides = psmsForKey.GroupBy(p => p.FullSequence);
+                    foreach (var peptide in peptides)
+                    {
+                        var outString = new List<string> { peptide.First().BaseSequence, peptide.First().FullSequence, peptide.First().ProteinAccession, peptide.First().ProteinName, peptide.First().GeneName, peptide.First().Description, peptide.First().StartAndEndResiduesInProtein };
+
+                        var reporterIonIntensities = new double[peptide.First().Intensities.Count()];
+                        foreach (var psm in peptide)
+                        {
+                            for (int i = 0; i < peptide.First().Intensities.Count(); i++)
+                            {
+                                reporterIonIntensities[i] += psm.Intensities[i];
+                            }
+                        }
+                        outString.AddRange(reporterIonIntensities.Select(i => i.ToString()));
+                        writer.WriteLine(string.Join("\t", outString));
+                    }
+                }
+            }
+            
         }
 
 
