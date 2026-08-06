@@ -1433,9 +1433,15 @@ namespace Test.DatabaseTests
         public static void ConcatDbs()
         {
             var yeast_xml = @"E:\Databases\uniprotkb_taxonomy_id_559292_AND_review_2024_08_16.xml";
+            var yeast_fasta = @"E:\Databases\uniprotkb_taxonomy_id_559292_AND_review_2026_08_05.fasta";
             var human_xml = @"E:\Databases\uniprotkb_taxonomy_id_9606_AND_reviewed_2026_07_23.xml";
+            var yeast_fasta_proteins = ProteinDbLoader.LoadProteinFasta(yeast_fasta, true, DecoyType.None, true, out var errors1);
+            var fasta_prot = yeast_fasta_proteins.Where(p => p.OneBasedPossibleLocalizedModifications.Any()).ToArray();
+
             var yeast_proteins = ProteinDbLoader.LoadProteinXML(yeast_xml, true, DecoyType.None, new List<Modification>(), false, new List<string>(), out var errors);
+            var xml_prot = yeast_proteins.Where(p => p.OneBasedPossibleLocalizedModifications.Any()).ToArray();
             var human_proteins = ProteinDbLoader.LoadProteinXML(human_xml, true, DecoyType.None, new List<Modification>(), false, new List<string>(), out var errors2);
+            var human_prot = human_proteins.Where(p => p.OneBasedPossibleLocalizedModifications.Any()).ToArray();
             var combined = yeast_proteins.Concat(human_proteins).ToList();
             var combinedPath = @"E:\Databases\yeast_human_combined.xml";
             ProteinDbWriter.WriteXmlDatabase(new Dictionary<string, HashSet<Tuple<int, Modification>>>(), combined, combinedPath);
