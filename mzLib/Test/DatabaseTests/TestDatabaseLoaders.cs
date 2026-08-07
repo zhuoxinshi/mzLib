@@ -285,6 +285,7 @@ namespace Test.DatabaseTests
             Assert.AreEqual("S-palmitoyl cysteine on C", firstMod.IdWithMotif);
         }
 
+
         [Test]
         public static void LoadModWithNl()
         {
@@ -1646,22 +1647,83 @@ namespace Test.DatabaseTests
             var myMassErrors = myPsms.SelectMany(p => p.MatchedIons.Select(i => i.MassErrorDa)).ToList();
         }
 
-        [Test]
-        public static void ConcatDbs()
-        {
-            var yeast_xml = @"E:\Databases\uniprotkb_taxonomy_id_559292_AND_review_2024_08_16.xml";
-            var yeast_fasta = @"E:\Databases\uniprotkb_taxonomy_id_559292_AND_review_2026_08_05.fasta";
-            var human_xml = @"E:\Databases\uniprotkb_taxonomy_id_9606_AND_reviewed_2026_07_23.xml";
-            var yeast_fasta_proteins = ProteinDbLoader.LoadProteinFasta(yeast_fasta, true, DecoyType.None, true, out var errors1);
-            var fasta_prot = yeast_fasta_proteins.Where(p => p.OneBasedPossibleLocalizedModifications.Any()).ToArray();
 
-            var yeast_proteins = ProteinDbLoader.LoadProteinXML(yeast_xml, true, DecoyType.None, new List<Modification>(), false, new List<string>(), out var errors);
-            var xml_prot = yeast_proteins.Where(p => p.OneBasedPossibleLocalizedModifications.Any()).ToArray();
-            var human_proteins = ProteinDbLoader.LoadProteinXML(human_xml, true, DecoyType.None, new List<Modification>(), false, new List<string>(), out var errors2);
-            var human_prot = human_proteins.Where(p => p.OneBasedPossibleLocalizedModifications.Any()).ToArray();
-            var combined = yeast_proteins.Concat(human_proteins).ToList();
-            var combinedPath = @"E:\Databases\yeast_human_combined.xml";
-            ProteinDbWriter.WriteXmlDatabase(new Dictionary<string, HashSet<Tuple<int, Modification>>>(), combined, combinedPath);
+
+        /// <summary>
+        /// Round-trips a raw UniProt XML (humanGAPDH.xml, whose PTMs are stored only as "modified residue"
+        /// descriptions such as "Phosphoserine") through LoadProteinXML -> WriteXmlDatabase -> LoadProteinXML
+        /// and verifies the modifications are preserved.
+        ///
+        /// Two behaviours are asserted:
+        ///   1. Reading a raw UniProt Xml resolves the "modified residue" descriptions to real Modifications ONLY
+        ///      when the modification vocabulary (the UniProt ptmlist) is supplied via allKnownModifications.
+        ///   2. WriteXmlDatabase embeds the full &lt;modification&gt; definitions at the top of the file, so the
+        ///      written database is self-contained and re-reads to an identical set of localized modifications
+        ///      even when NO external modifications are supplied.
+        /// </summary>
+        [Test]
+        public static void LoadXmlWriteXmlModificationsArePreserved()
+        {
+            // Build the UniProt modification vocabulary exactly as the LoadingLipidAsMod test (and MetaMorpheus) do,
+            // so the "modified residue" descriptions in the XML can be resolved to real Modification objects.
+            var psiModDeserialized = Loaders.LoadPsiMod(Path.Combine(TestContext.CurrentContext.TestDirectory, "PSI-MOD.obo2.xml"));
+            Dictionary<string, int> formalChargesDictionary = Loaders.GetFormalChargesDictionary(psiModDeserialized);
+            List<Modification> uniProtPtms = Loaders.LoadUniprot(Path.Combine(TestContext.CurrentContext.TestDirectory, "ptmlist2.txt"), formalChargesDictionary).ToList();
+
+            string originalDb = Path.Combine(TestContext.CurrentContext.TestDirectory, "DatabaseTests", "humanGAPDH.xml");
+            string roundTrippedDb = Path.Combine(TestContext.CurrentContext.TestDirectory, "humanGAPDH_modsRoundTrip.xml");
+
+            // ---- Read the raw UniProt XML WITH the ptmlist: descriptions resolve to real Modifications ----
+            List<Protein> loadedWithPtms = ProteinDbLoader.LoadProteinXML(originalDb, true, DecoyType.None, uniProtPtms, false, null, out var unknownWithPtms);
+            IBioPolymer canonicalOriginal = loadedWithPtms.Select(p => p.ConsensusVariant).Distinct().First();
+            List<string> originalSites = DescribeLocalizedMods(canonicalOriginal);
+
+            // Every "modified residue" description in humanGAPDH.xml is defined in ptmlist2.txt, so all resolve and none are unknown.
+            Assert.AreEqual(0, unknownWithPtms.Count);
+            Assert.AreEqual(39, canonicalOriginal.OneBasedPossibleLocalizedModifications.Count); // distinct modified positions
+            Assert.AreEqual(47, originalSites.Count);                                            // total localized modifications
+
+            // ---- Sanity check the negative case: WITHOUT the vocabulary, the same descriptions cannot be resolved ----
+            // Passing a single unrelated (invalid) modification forces the static modification dictionaries to be
+            // rebuilt without GAPDH's PTMs, so every "modified residue" description falls through to
+            // unknownModifications and is dropped. This makes the negative case independent of test execution order.
+            List<Protein> loadedWithoutPtms = ProteinDbLoader.LoadProteinXML(originalDb, true, DecoyType.None,
+                new List<Modification> { new Modification("not a real GAPDH mod") }, false, null, out var unknownWithoutPtms);
+            IBioPolymer canonicalNoPtms = loadedWithoutPtms.Select(p => p.ConsensusVariant).Distinct().First();
+            Assert.AreEqual(0, canonicalNoPtms.OneBasedPossibleLocalizedModifications.Count); // nothing localized
+            Assert.IsTrue(unknownWithoutPtms.Count > 0);                                       // descriptions reported as unknown
+
+            // ---- Write the fully-resolved proteins back out ----
+            ProteinDbWriter.WriteXmlDatabase(new Dictionary<string, HashSet<Tuple<int, Modification>>>(), loadedWithPtms, roundTrippedDb);
+
+            // The written database is SELF-CONTAINED: it embeds one <modification> definition per distinct modification,
+            // so it can be re-read without supplying any external ptmlist.
+            int distinctModsWritten = canonicalOriginal.OneBasedPossibleLocalizedModifications.SelectMany(kv => kv.Value).Distinct().Count();
+            Assert.AreEqual(distinctModsWritten, ProteinDbLoader.GetPtmListFromProteinXml(roundTrippedDb).Count);
+
+            // ---- Re-read the written file WITHOUT any external modifications ----
+            List<Protein> reloaded = ProteinDbLoader.LoadProteinXML(roundTrippedDb, true, DecoyType.None, new List<Modification>(), false, null, out var unknownReloaded);
+            IBioPolymer canonicalReloaded = reloaded.Select(p => p.ConsensusVariant).Distinct().First();
+            List<string> reloadedSites = DescribeLocalizedMods(canonicalReloaded);
+
+            // ---- The modifications are preserved: identical positions and identities, nothing unknown ----
+            Assert.AreEqual(0, unknownReloaded.Count);
+            Assert.AreEqual(originalSites, reloadedSites); // ClassicAssert.AreEqual compares the lists element-wise
+
+            File.Delete(roundTrippedDb);
+        }
+
+        /// <summary>
+        /// Flattens a biopolymer's localized modifications into a sorted list of "position:IdWithMotif" strings.
+        /// IdWithMotif is used because that is the identity ProteinDbWriter serializes, so equality of these lists
+        /// reflects true preservation of modification identity and location through an XML round-trip.
+        /// </summary>
+        private static List<string> DescribeLocalizedMods(IBioPolymer biopolymer)
+        {
+            return biopolymer.OneBasedPossibleLocalizedModifications
+                .SelectMany(kv => kv.Value.Select(mod => $"{kv.Key}:{mod.IdWithMotif}"))
+                .OrderBy(s => s, StringComparer.Ordinal)
+                .ToList();
         }
     }
 }
