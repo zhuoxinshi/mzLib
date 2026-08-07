@@ -1,6 +1,6 @@
-using System.Text.RegularExpressions;
-using TorchSharp;
+﻿using TorchSharp;
 using static TorchSharp.torch;
+using Omics.SequenceConversion;
 
 namespace Chromatography.RetentionTimePrediction.Chronologer;
 
@@ -8,14 +8,18 @@ namespace Chromatography.RetentionTimePrediction.Chronologer;
 /// Chronologer-based retention time predictor using deep learning.
 /// Predicts C18 retention times reported in % ACN.
 /// </summary>
-public class ChronologerRetentionTimePredictor : RetentionTimePredictor, IDisposable
+public class ChronologerRetentionTimePredictor : RetentionTimePredictor
 {
+    private static readonly SequenceConversionService ConversionService = SequenceConversionService.Default;
+    private static readonly string ChronologerFormatName = ChronologerSequenceFormatSchema.Instance.FormatName;
+    private static readonly string MzLibFormatName = MzLibSequenceFormatSchema.Instance.FormatName;
+    private static readonly string MassShiftFormatName = MassShiftSequenceFormatSchema.Instance.FormatName;
+
     private readonly Chronologer _model;
-    private readonly object _modelLock = new(); 
+    private readonly object _modelLock = new();
     private bool _disposed;
 
-    protected override int MaxSequenceLength => 50;
-    private int EncodedLength => MaxSequenceLength + 2; // +2 for N/C termini tokens
+    protected override int MaxSequenceLength => ChronologerSequenceFormatSchema.MaxSequenceLength;
     public override string PredictorName => "Chronologer";
     public override SeparationType SeparationType => SeparationType.HPLC;
 
@@ -23,9 +27,9 @@ public class ChronologerRetentionTimePredictor : RetentionTimePredictor, IDispos
     /// Initializes a new Chronologer predictor with custom weights file. Uses default pretrained weights if none provided.
     /// </summary>
     public ChronologerRetentionTimePredictor(
-        IncompatibleModHandlingMode modHandlingMode = IncompatibleModHandlingMode.RemoveIncompatibleMods,
+        SequenceConversionHandlingMode sequenceHandlingMode = SequenceConversionHandlingMode.RemoveIncompatibleElements,
         string? weightsPath = null)
-        : base(modHandlingMode)
+        : base(sequenceHandlingMode)
     {
         _model = weightsPath != null
             ? new Chronologer(weightsPath)
@@ -35,7 +39,7 @@ public class ChronologerRetentionTimePredictor : RetentionTimePredictor, IDispos
     protected override bool ValidateBasicConstraints(IRetentionPredictable peptide, out RetentionTimeFailureReason? failureReason)
     {
         var baseSequence = peptide.BaseSequence;
-        if (baseSequence.Any(aa => Array.IndexOf(CanonicalAminoAcids, aa) == -1))
+        if (baseSequence.Any(aa => !CanonicalAminoAcids.Contains(aa)))
         {
             failureReason = RetentionTimeFailureReason.InvalidAminoAcid;
             return false;
@@ -55,7 +59,7 @@ public class ChronologerRetentionTimePredictor : RetentionTimePredictor, IDispos
             return null;
 
         // Encode to tensor
-        var ids = new long[EncodedLength]; // Zero-padded
+        var ids = new long[ChronologerSequenceFormatSchema.EncodedLength]; // Zero-padded
         for (int i = 0; i < formattedSequence.Length; i++)
         {
             if (!CodeToInt.TryGetValue(formattedSequence[i], out int v))
@@ -65,78 +69,217 @@ public class ChronologerRetentionTimePredictor : RetentionTimePredictor, IDispos
         }
 
         // Output shape: [1, MaxPepLen+2], dtype int64
-        using Tensor sequenceTensor = tensor(ids, dtype: ScalarType.Int64).reshape(1, EncodedLength);
+        using Tensor sequenceTensor = tensor(ids, dtype: ScalarType.Int64).reshape(1, ChronologerSequenceFormatSchema.EncodedLength);
 
 
         // Predict retention time - keep both prediction AND disposal inside lock
         lock (_modelLock)
         {
-            using Tensor prediction = _model.Predict(sequenceTensor);
+            // Deterministically dispose every tensor created during inference — including the ~30
+            // intermediates allocated inside the model's forward() (residual clones, conv/norm/relu
+            // outputs). Without an explicit scope those are reclaimed by the GC finalizer thread, which
+            // calls into libtorch's native allocator concurrently with the main thread's allocations and
+            // corrupts the native heap (STATUS_HEAP_CORRUPTION, 0xC0000374) once enough predictions have
+            // accumulated. The race only surfaces in high-volume runs (e.g. spectral-library builds).
+            using var scope = NewDisposeScope();
+            using Tensor prediction = _model.Predict(sequenceTensor).cpu();
             return prediction[0].ToDouble();
         }
+    }
+
+    /// <summary>
+    /// Batched override: formats/encodes the peptides in parallel (CPU) and runs the Chronologer model in
+    /// large batched forward passes instead of one locked batch-1 call per peptide. The model is in eval
+    /// mode (BatchNorm uses running statistics), so each peptide's prediction is independent of the batch —
+    /// results match <see cref="PredictCore"/> to float32 precision (libtorch selects different conv/matmul
+    /// kernels at batch size m vs 1, so the two paths are not bit-identical), just far faster for many peptides.
+    /// </summary>
+    public override IReadOnlyList<(double? PredictedValue, IRetentionPredictable Peptide, RetentionTimeFailureReason? FailureReason)>
+        PredictRetentionTimeEquivalents(IEnumerable<IRetentionPredictable> peptides, int maxThreads = 1)
+    {
+        if (_disposed)
+            throw new ObjectDisposedException(nameof(ChronologerRetentionTimePredictor));
+
+        var list = peptides as IReadOnlyList<IRetentionPredictable> ?? peptides.ToList();
+        int n = list.Count;
+        int encodedLength = ChronologerSequenceFormatSchema.EncodedLength;
+        var results = new (double?, IRetentionPredictable, RetentionTimeFailureReason?)[n];
+        var encoded = new long[n][];                          // null when the peptide could not be encoded
+        var reasons = new RetentionTimeFailureReason?[n];
+
+        // Phase 1 — format + integer-encode each peptide in parallel (pure CPU, no model access).
+        System.Threading.Tasks.Parallel.For(0, n,
+            new System.Threading.Tasks.ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, maxThreads) }, i =>
+        {
+            var pep = list[i];
+            if (!ValidateBasicConstraints(pep, out RetentionTimeFailureReason? basicReason))
+            {
+                reasons[i] = basicReason;
+                return;
+            }
+            string? formatted = GetFormattedSequence(pep, out RetentionTimeFailureReason? fmtReason);
+            if (formatted == null)
+            {
+                reasons[i] = fmtReason ?? RetentionTimeFailureReason.PredictionError;
+                return;
+            }
+            var ids = new long[encodedLength]; // zero-padded
+            for (int k = 0; k < formatted.Length; k++)
+            {
+                if (!CodeToInt.TryGetValue(formatted[k], out int v)) { ids = null!; break; }
+                ids[k] = v;
+            }
+            if (ids == null) { reasons[i] = RetentionTimeFailureReason.PredictionError; return; }
+            encoded[i] = ids;
+        });
+
+        var valid = new List<int>(n);
+        for (int i = 0; i < n; i++) if (encoded[i] != null) valid.Add(i);
+
+        // Phase 2 — batched model inference. One forward pass per chunk (model lock held once per chunk).
+        const int chunkSize = 2048;
+        lock (_modelLock)
+        {
+            using var noGrad = no_grad();
+            for (int off = 0; off < valid.Count; off += chunkSize)
+            {
+                // Deterministically dispose every tensor created during this chunk — including the ~30
+                // intermediates allocated inside the model's forward() (residual clones, conv/norm outputs).
+                // Without a dispose scope those rely on the GC finalizer thread, which races the main thread's
+                // libtorch allocator and corrupts the native heap (0xC0000374) once enough inference has run.
+                using var scope = NewDisposeScope();
+                int m = Math.Min(chunkSize, valid.Count - off);
+                var flat = new long[(long)m * encodedLength];
+                for (int j = 0; j < m; j++)
+                    Array.Copy(encoded[valid[off + j]], 0, flat, (long)j * encodedLength, encodedLength);
+
+                using Tensor input = tensor(flat, dtype: ScalarType.Int64).reshape(m, encodedLength);
+                using Tensor prediction = _model.Predict(input);           // [m, 1]
+                double[] preds = prediction.reshape(m).to(ScalarType.Float64).cpu().data<double>().ToArray();
+                for (int j = 0; j < m; j++)
+                {
+                    int i = valid[off + j];
+                    results[i] = (preds[j], list[i], null);
+                }
+            }
+        }
+
+        for (int i = 0; i < n; i++)
+            if (encoded[i] == null)
+                results[i] = ((double?)null, list[i], reasons[i]);
+
+        return results;
     }
 
     public override string? GetFormattedSequence(IRetentionPredictable peptide, out RetentionTimeFailureReason? failureReason)
     {
         failureReason = null;
 
-        // Get full sequence with mass shifts
-        string workingSequence = peptide.FullSequenceWithMassShifts;
-
-        // Replace mass shifts with chronologer dictionary codes
-        foreach (var (pattern, replacement) in ModificationPatterns)
+        var candidates = new (string? Sequence, string? ForcedFormat)[]
         {
-            workingSequence = pattern.Replace(workingSequence, replacement);
-        }
+            (peptide.FullSequence, null),
+            (peptide.FullSequenceWithMassShifts, MassShiftFormatName),
+            (peptide.BaseSequence, MzLibFormatName)
+        };
 
-        // Add N-terminus token
-        workingSequence = AddNTerminusToken(workingSequence);
-
-        // Add C-terminus token
-        workingSequence += "_";
-
-        // At this point we have replaced everything that is chronologer compatible with its chronologer dictionary representation. 
-        // If we have any more [] in the full sequence, it means there are incompatible modifications.
-        if (!workingSequence.Contains('[') && !workingSequence.Contains(']')) 
-            return workingSequence;
-
-        switch (ModHandlingMode)
+        try
         {
-            case IncompatibleModHandlingMode.ReturnNull:
-                failureReason = RetentionTimeFailureReason.IncompatibleModifications;
-                return null;
+            foreach (var (sequence, forcedFormat) in candidates)
+            {
+                if (string.IsNullOrWhiteSpace(sequence))
+                    continue;
 
-            case IncompatibleModHandlingMode.RemoveIncompatibleMods:
-                // Remove incompatible modification annotations from full sequence
-                var sb = new System.Text.StringBuilder();
-                int i = 0;
-                while (i < workingSequence.Length)
+                var attemptWarnings = new ConversionWarnings();
+
+                var sourceFormat = forcedFormat
+                    ?? ConversionService.DetectFormat(sequence!)
+                    ?? MzLibFormatName;
+
+                var formatted = ConversionService.Convert(
+                    sequence!,
+                    sourceFormat,
+                    ChronologerFormatName,
+                    attemptWarnings,
+                    SequenceHandlingMode);
+
+                if (formatted != null)
                 {
-                    if (workingSequence[i] == '[')
-                    {
-                        // Found modification
-                        int closeIdx = workingSequence.IndexOf(']', i);
-                        if (closeIdx != -1)
-                        {
-                            // Skip modification annotation
-                            i = closeIdx + 1;
-                            continue;
-                        }
-                    }
-                    // Copy character
-                    sb.Append(workingSequence[i]);
-                    i++;
+                    return formatted;
                 }
-                return sb.ToString();
 
-            // Use base sequence without modifications with default termini
-            case IncompatibleModHandlingMode.UsePrimarySequence:
-                return $"-{peptide.BaseSequence}_";
+                var mappedReason = MapFailureReason(attemptWarnings.FailureReason)
+                    ?? (SequenceHandlingMode == SequenceConversionHandlingMode.ReturnNull
+                        ? RetentionTimeFailureReason.IncompatibleModifications
+                        : null);
 
-            case IncompatibleModHandlingMode.ThrowException:
-            default:
-                throw new IncompatibleModificationException(peptide.FullSequence, workingSequence, PredictorName);
+                if (SequenceHandlingMode == SequenceConversionHandlingMode.UsePrimarySequence)
+                {
+                    failureReason = mappedReason;
+                    return FormatPrimarySequence(peptide.BaseSequence);
+                }
+
+                if (SequenceHandlingMode == SequenceConversionHandlingMode.ReturnNull)
+                {
+                    failureReason = mappedReason ?? RetentionTimeFailureReason.IncompatibleModifications;
+                    return null;
+                }
+
+                failureReason ??= mappedReason;
+            }
         }
+        catch (SequenceConversionException ex)
+        {
+            HandleConversionException(peptide, ex, ref failureReason);
+
+            if (SequenceHandlingMode == SequenceConversionHandlingMode.UsePrimarySequence)
+                return FormatPrimarySequence(peptide.BaseSequence);
+
+            return null;
+        }
+
+        failureReason ??= SequenceHandlingMode == SequenceConversionHandlingMode.ReturnNull
+            ? RetentionTimeFailureReason.IncompatibleModifications
+            : RetentionTimeFailureReason.PredictionError;
+
+        if (SequenceHandlingMode == SequenceConversionHandlingMode.UsePrimarySequence)
+        {
+            return FormatPrimarySequence(peptide.BaseSequence);
+        }
+
+        return null;
+    }
+
+    private void HandleConversionException(IRetentionPredictable peptide, SequenceConversionException exception, ref RetentionTimeFailureReason? failureReason)
+    {
+        failureReason = MapFailureReason(exception.FailureReason);
+
+        if (SequenceHandlingMode == SequenceConversionHandlingMode.ThrowException &&
+            exception.FailureReason == ConversionFailureReason.IncompatibleModifications)
+        {
+            var workingSequence = peptide.FullSequenceWithMassShifts ?? peptide.BaseSequence;
+            throw new IncompatibleModificationException(
+                peptide.FullSequence,
+                workingSequence,
+                PredictorName);
+        }
+    }
+
+    private static string FormatPrimarySequence(string baseSequence)
+    {
+        return string.Concat(ChronologerSequenceFormatSchema.FreeNTerminus, baseSequence, ChronologerSequenceFormatSchema.CTerminus);
+    }
+
+    private static RetentionTimeFailureReason? MapFailureReason(ConversionFailureReason? reason)
+    {
+        if (!reason.HasValue)
+            return null;
+
+        return reason.Value switch
+        {
+            ConversionFailureReason.IncompatibleModifications => RetentionTimeFailureReason.IncompatibleModifications,
+            ConversionFailureReason.InvalidSequence => RetentionTimeFailureReason.EmptySequence,
+            _ => RetentionTimeFailureReason.PredictionError
+        };
     }
 
     #region Sequence Encoding 
@@ -153,71 +296,15 @@ public class ChronologerRetentionTimePredictor : RetentionTimePredictor, IDispos
     private static readonly Dictionary<char, int> CodeToInt =
         Residues.Select((c, i) => (c, i + 1)).ToDictionary(t => t.c, t => t.Item2);
 
-    // Compiled regex patterns for performance
-    private static readonly (Regex pattern, string replacement)[] ModificationPatterns = new[]
-    {
-        (new Regex(@"M\[\+15\.99\d*\]", RegexOptions.Compiled), "m"),  // Oxidation on M
-        (new Regex(@"C\[\+57\.02\d*\]", RegexOptions.Compiled), "c"),  // Carbamidomethyl on C
-        (new Regex(@"C\[\+39\.99\d*\]", RegexOptions.Compiled), "d"),  // Alternative C mod
-        (new Regex(@"\[\-18\.01\d*\]E", RegexOptions.Compiled), "e"), // PyroGlu from E (prefix)
-        (new Regex(@"E\[\-18\.01\d*\]", RegexOptions.Compiled), "e"),  // PyroGlu from E (suffix)
-        (new Regex(@"\[\-17\.02\d*\]Q", RegexOptions.Compiled), "e"), // PyroGlu from Q (prefix)
-        (new Regex(@"Q\[\-17\.02\d*\]", RegexOptions.Compiled), "e"),  // PyroGlu from Q (suffix)
-        (new Regex(@"S\[\+79\.96\d*\]", RegexOptions.Compiled), "s"),  // Phosphorylation on S
-        (new Regex(@"T\[\+79\.96\d*\]", RegexOptions.Compiled), "t"),  // Phosphorylation on T
-        (new Regex(@"Y\[\+79\.96\d*\]", RegexOptions.Compiled), "y"),  // Phosphorylation on Y
-        (new Regex(@"K\[\+42\.01\d*\]", RegexOptions.Compiled), "a"),  // Acetylation on K
-        (new Regex(@"K\[\+100\.0\d*\]", RegexOptions.Compiled), "b"),  // Succinylation on K
-        (new Regex(@"K\[\+114\.0\d*\]", RegexOptions.Compiled), "u"),  // Ubiquitination on K
-        (new Regex(@"K\[\+14\.01\d*\]", RegexOptions.Compiled), "n"),  // Methylation on K
-        (new Regex(@"K\[\+28\.03\d*\]", RegexOptions.Compiled), "o"),  // Dimethylation on K
-        (new Regex(@"K\[\+42\.04\d*\]", RegexOptions.Compiled), "p"),  // Trimethylation on K
-        (new Regex(@"R\[\+14\.01\d*\]", RegexOptions.Compiled), "q"),  // Methylation on R
-        (new Regex(@"R\[\+28\.03\d*\]", RegexOptions.Compiled), "r"),  // Dimethylation on R
-        (new Regex(@"K\[\+224\.1\d*\]", RegexOptions.Compiled), "z"),  // GlyGly on K
-        (new Regex(@"K\[\+229\.1\d*\]", RegexOptions.Compiled), "x"),  // Heavy GlyGly on K
-    };
-
-    // N-terminus modification codes
-    private static readonly Dictionary<string, char> NTerminusCodes = new()
-    {
-        { "+42.01", '^' },  // N-term acetylation
-        { "+224.1", '&' },  // N-term GlyGly
-        { "+229.1", '*' }   // N-term heavy GlyGly
-    };
-
-    /// <summary>
-    /// Adds appropriate N-terminus token based on modifications or default state.
-    /// </summary>
-    private static string AddNTerminusToken(string seq)
-    {
-        // Check for PyroGlu at N-terminus
-        if (seq[0] == 'd') // pyroGlu at first position
-            return ")" + seq;
-
-        if (seq[0] == 'e') // cyclized CAM-Cys at first
-            return "(" + seq;
-
-        // Check for N-terminal mass modification
-        if (seq[0] == '[')
-        {
-            // grab [+xx.xx]
-            int close = seq.IndexOf(']');
-
-            string key = seq.Substring(1, 6);
-            if (!NTerminusCodes.TryGetValue(key, out char nterm))
-                nterm = '-'; // Unknown modification - use default
-
-            return nterm + seq.Substring(close + 1);
-        }
-
-        // Free N-terminus
-        return "-" + seq;
-    }
-
     #endregion
 
-    public void Dispose()
+    /// <summary>
+    /// Releases the underlying Chronologer TorchSharp model. Overrides the base
+    /// <see cref="RetentionTimePredictor.Dispose"/> so that virtual dispatch reaches
+    /// this implementation even when the caller holds a base-class or
+    /// <see cref="IDisposable"/> reference. Safe to call multiple times.
+    /// </summary>
+    public override void Dispose()
     {
         if (_disposed)
             return;

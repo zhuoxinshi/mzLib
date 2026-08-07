@@ -17,6 +17,7 @@ namespace Readers
         protected static readonly Regex IonParser = new Regex(@"([a-zA-Z]+)(\d+)");
 
         public string FullSequence { get; protected set; }
+        public string ProForma { get; protected set; }
         public int Ms2ScanNumber { get; protected set; }
         public string FileNameWithoutExtension { get; protected set; }
         public int PrecursorScanNum { get; protected set; }
@@ -24,6 +25,12 @@ namespace Readers
         public double? PrecursorIntensity { get; }
         public double PrecursorMz { get; protected set; }
         public double PrecursorMass { get; protected set; }
+        /// <summary>
+        /// The observed neutral mass of the most abundant (tallest) isotopologue of the precursor envelope,
+        /// the companion observation to the monoisotopic <see cref="PrecursorMass"/>. Null when the source
+        /// file did not contain the "Precursor Most Abundant Mass" column (the usual monoisotopic-mode case).
+        /// </summary>
+        public double? PrecursorMostAbundantMass { get; protected set; }
         public double RetentionTime { get; protected set; }
         public double? CollisionEnergy { get; protected set; }
         public double Score { get; protected set; }
@@ -45,6 +52,12 @@ namespace Readers
         public string MonoisotopicMassString { get; protected set; }
         public string MassDiffDa { get; protected set; }
         public string MassDiffPpm { get; protected set; }
+        /// <summary>
+        /// Optional most-abundant-mode precursor mass error (ppm), the analogue of <see cref="MassDiffPpm"/>.
+        /// Null when the source file did not contain the "Most Abundant Mass Diff (ppm)" column (the usual
+        /// monoisotopic-mode case). Read as a string because ambiguous matches carry a "|"-separated list.
+        /// </summary>
+        public string MostAbundantMassDiffPpm { get; protected set; }
         public string Name { get; protected set; }
         public string GeneName { get; protected set; }
         public string OrganismName { get; protected set; }
@@ -72,6 +85,7 @@ namespace Readers
         public string BaseSequence => BaseSeq;
         public int ChargeState => PrecursorCharge;
         public bool IsDecoy => DecoyContamTarget.Contains('D');
+        public bool IsEntrapment => DecoyContamTarget.Contains('E');
         public double MonoisotopicMass => double.TryParse(MonoisotopicMassString.Split('|')[0], CultureInfo.InvariantCulture, out double monoMass) ? monoMass : -1;
         private List<(string proteinAccessions, string geneName, string organism)>? _proteinGroupInfos;
         public List<(string proteinAccessions, string geneName, string organism)> ProteinGroupInfos
@@ -143,6 +157,7 @@ namespace Readers
             PrecursorIntensity = GetOptionalValue<double>(SpectrumMatchFromTsvHeader.PrecursorIntensity, parsedHeader, spl, null);
             PrecursorMz = GetRequiredValue<double>(SpectrumMatchFromTsvHeader.PrecursorMz, parsedHeader, spl);
             PrecursorMass = GetRequiredValue<double>(SpectrumMatchFromTsvHeader.PrecursorMass, parsedHeader, spl);
+            PrecursorMostAbundantMass = GetOptionalValue<double>(SpectrumMatchFromTsvHeader.PrecursorMostAbundantMass, parsedHeader, spl, null);
             BaseSeq = RemoveParentheses(GetRequiredValue(SpectrumMatchFromTsvHeader.BaseSequence, parsedHeader, spl));
             FullSequence = GetRequiredValue(SpectrumMatchFromTsvHeader.FullSequence, parsedHeader, spl);
             MonoisotopicMassString = GetRequiredValue(SpectrumMatchFromTsvHeader.MonoisotopicMass, parsedHeader, spl);
@@ -163,16 +178,18 @@ namespace Readers
             DeltaScore = GetOptionalValue<double>(SpectrumMatchFromTsvHeader.DeltaScore, parsedHeader, spl);
             Notch = GetOptionalValue(SpectrumMatchFromTsvHeader.Notch, parsedHeader, spl);
             EssentialSeq = GetOptionalValue(SpectrumMatchFromTsvHeader.EssentialSequence, parsedHeader, spl);
+            ProForma = GetOptionalValue(SpectrumMatchFromTsvHeader.ProForma, parsedHeader, spl); // optional: absent in pre-ProForma files
             MissedCleavage = GetOptionalValue(SpectrumMatchFromTsvHeader.MissedCleavages, parsedHeader, spl);
             MassDiffDa = GetOptionalValue(SpectrumMatchFromTsvHeader.MassDiffDa, parsedHeader, spl);
             MassDiffPpm = GetOptionalValue(SpectrumMatchFromTsvHeader.MassDiffPpm, parsedHeader, spl);
+            MostAbundantMassDiffPpm = GetOptionalValue(SpectrumMatchFromTsvHeader.MostAbundantMassDiffPpm, parsedHeader, spl);
             Accession = GetOptionalValue(SpectrumMatchFromTsvHeader.Accession, parsedHeader, spl);
             Name = GetOptionalValue(SpectrumMatchFromTsvHeader.Name, parsedHeader, spl);
             GeneName = GetOptionalValue(SpectrumMatchFromTsvHeader.GeneName, parsedHeader, spl);
             OrganismName = GetOptionalValue(SpectrumMatchFromTsvHeader.OrganismName, parsedHeader, spl);
             IntersectingSequenceVariations = GetOptionalValue(SpectrumMatchFromTsvHeader.IntersectingSequenceVariations, parsedHeader, spl);
-            IdentifiedSequenceVariations = GetOptionalValue(SpectrumMatchFromTsvHeader.IdentifiedSequenceVariations, parsedHeader, spl);
-            SpliceSites = GetOptionalValue(SpectrumMatchFromTsvHeader.SpliceSites, parsedHeader, spl);
+            IdentifiedSequenceVariations = GetOptionalValue(SpectrumMatchFromTsvHeader.IdentifiedSequenceVariations, parsedHeader, spl, "");
+            SpliceSites = GetOptionalValue(SpectrumMatchFromTsvHeader.SpliceSites, parsedHeader, spl, "");
             Description = GetOptionalValue(SpectrumMatchFromTsvHeader.Description, parsedHeader, spl);
             StartAndEndResiduesInParentSequence = GetOptionalValue(SpectrumMatchFromTsvHeader.StartAndEndResiduesInFullSequence, parsedHeader, spl);
             PreviousResidue = GetOptionalValue(SpectrumMatchFromTsvHeader.PreviousResidue, parsedHeader, spl);
@@ -203,6 +220,7 @@ namespace Readers
             if (!psm.FullSequence.Contains("|"))
             {
                 FullSequence = fullSequence;
+                ProForma = psm.ProForma;
                 EssentialSeq = psm.EssentialSeq;
                 BaseSeq = baseSequence == "" ? psm.BaseSeq : baseSequence;
                 StartAndEndResiduesInParentSequence = psm.StartAndEndResiduesInParentSequence;
@@ -212,29 +230,54 @@ namespace Readers
                 MonoisotopicMassString = psm.MonoisotopicMassString;
                 MassDiffDa = psm.MassDiffDa;
                 MassDiffPpm = psm.MassDiffPpm;
+                MostAbundantMassDiffPpm = psm.MostAbundantMassDiffPpm;
             }
             // potentially ambiguous fields
             else
             {
                 FullSequence = fullSequence;
+                // ProForma uses '|' as an internal descriptor separator, so it cannot be split per candidate; carry the parent value.
+                ProForma = psm.ProForma;
                 EssentialSeq = psm.EssentialSeq.Split("|")[index];
                 BaseSeq = baseSequence == "" ? psm.BaseSeq.Split("|")[index] : baseSequence;
                 StartAndEndResiduesInParentSequence = psm.StartAndEndResiduesInParentSequence.Split("|")[index];
                 Accession = psm.Accession.Split("|")[index];
-                Name = psm.Name.Split("|")[index];
-                GeneName = psm.GeneName.Split("|")[index];
+
+                if (psm.Name is null)
+                    Name = string.Empty;
+                else
+                {
+                    var nameSplits = psm.Name.Split("|");
+                    if (nameSplits.Length == 1)
+                        Name = nameSplits[0];
+                    else
+                        Name = nameSplits[index];
+                }
+
+                if (psm.GeneName is null)
+                    GeneName = string.Empty;
+                else
+                {
+                    var geneSplits = psm.GeneName.Split("|");
+                    if (geneSplits.Length == 1)
+                        GeneName = geneSplits[0];
+                    else
+                        GeneName = geneSplits[index];
+                }
 
                 if (psm.MonoisotopicMassString.Split("|").Count() == 1)
                 {
                     MonoisotopicMassString = psm.MonoisotopicMassString.Split("|")[0];
                     MassDiffDa = psm.MassDiffDa.Split("|")[0];
                     MassDiffPpm = psm.MassDiffPpm.Split("|")[0];
+                    MostAbundantMassDiffPpm = psm.MostAbundantMassDiffPpm?.Split("|")[0];
                 }
                 else
                 {
                     MonoisotopicMassString = psm.MonoisotopicMassString.Split("|")[index];
                     MassDiffDa = psm.MassDiffDa.Split("|")[index];
                     MassDiffPpm = psm.MassDiffPpm.Split("|")[index];
+                    MostAbundantMassDiffPpm = psm.MostAbundantMassDiffPpm?.Split("|")[index];
                 }
             }
 
@@ -244,6 +287,8 @@ namespace Readers
             PrecursorScanNum = psm.PrecursorScanNum;
             PrecursorCharge = psm.PrecursorCharge;
             PrecursorIntensity = psm.PrecursorIntensity;
+            // An observation of the precursor envelope, so it is the same for every hypothesis of this match.
+            PrecursorMostAbundantMass = psm.PrecursorMostAbundantMass;
             Score = psm.Score;
             MatchedIons = psm.MatchedIons.ToList();
             ChildScanMatchedIons = psm.ChildScanMatchedIons;
@@ -294,7 +339,12 @@ namespace Readers
             {
                 return defaultValue;
             }
-            return splitLine[parsedHeader[header]].Trim();
+            var value = splitLine[parsedHeader[header]].Trim();
+            if (string.IsNullOrWhiteSpace(value)) // if the cell is empty or only whitespace, treat it as missing and return defaultValue
+            {
+                return defaultValue;
+            }
+            return value;
         }
 
         protected TNumber? GetOptionalValue<TNumber>(string header, Dictionary<string, int> parsedHeader, string[] splitLine, TNumber? defaultValue = null)

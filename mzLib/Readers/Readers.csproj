@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
 		<TargetFramework>net8.0</TargetFramework>
@@ -10,10 +10,19 @@
 
 	<ItemGroup>
 		<PackageReference Include="CsvHelper" Version="32.0.3" />
+		<!-- OpenMcdf is intentionally pinned to the 2.x line. DO NOT upgrade to 3.x.
+		     The Thermo CommonCore RawFileReader binary is compiled against OpenMcdf 2.x
+		     (v8.0.37 targets OpenMcdf 2.3.0); OpenMcdf 3.x is an API-incompatible rewrite
+		     that breaks Thermo .raw reading. Thermo's latest release still ships against
+		     OpenMcdf 2.x, so there is no 3.x-based option today. GHSA-5qwm-7pvp-w988
+		     (fixed in 3.1.4) is a DoS on crafted/untrusted CFB files and does not apply -
+		     we only read trusted local instrument files. -->
 		<PackageReference Include="OpenMcdf" Version="2.3.1" />
 		<PackageReference Include="OpenMcdf.Extensions" Version="2.3.1" />
 		<PackageReference Include="System.Data.SQLite" Version="1.0.118" />
 		<PackageReference Include="System.Runtime.InteropServices" Version="4.3.0" />
+		<PackageReference Include="TopDownProteomics" Version="0.0.299" />
+		<PackageReference Include="ZstdSharp.Port" Version="0.8.7" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -45,19 +54,23 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<None Update="Bruker\baf2sql_c.dll">
+		<!-- Bruker baf2sql native library + its VC++ 2012 runtime dependencies.
+		     These live in the project root (not a subfolder) so they copy to the output root
+		     and can be resolved by the bare-name DllImport ("baf2sql_c") in BrukerFileReader.
+		     baf2sql_c.dll depends on msvcp110/msvcr110/vcomp110, so all four must sit together. -->
+		<None Update="baf2sql_c.dll">
 		  <CopyToOutputDirectory>Always</CopyToOutputDirectory>
 		</None>
 		<None Update="Bruker\baf2sql_c.lib">
 		  <CopyToOutputDirectory>Always</CopyToOutputDirectory>
 		</None>
-		<None Update="Bruker\msvcp110.dll">
+		<None Update="msvcp110.dll">
 		  <CopyToOutputDirectory>Always</CopyToOutputDirectory>
 		</None>
-		<None Update="Bruker\msvcr110.dll">
+		<None Update="msvcr110.dll">
 		  <CopyToOutputDirectory>Always</CopyToOutputDirectory>
 		</None>
-		<None Update="Bruker\vcomp110.dll">
+		<None Update="vcomp110.dll">
 		  <CopyToOutputDirectory>Always</CopyToOutputDirectory>
 		</None>
 		<None Update="Thermo\ThermoFisher.CommonCore.BackgroundSubtraction.dll">

@@ -1,8 +1,7 @@
 ﻿using Easy.Common.Extensions;
 using MzLibUtil;
-using System.ComponentModel;
+using Omics.SequenceConversion;
 using PredictionClients.Koina.AbstractClasses;
-using PredictionClients.Koina.Util;
 
 namespace PredictionClients.Koina.SupportedModels.FlyabilityModels
 {
@@ -35,6 +34,8 @@ namespace PredictionClients.Koina.SupportedModels.FlyabilityModels
     /// </remarks>
     public class PFly2024FineTuned : DetectabilityModel
     {
+        private static readonly ISequenceConverter Converter = CreateUnimodConverter(
+            UnimodSequenceFormatSchema.Instance, new HashSet<int>());
         /// <summary>The Koina API model name identifier for peptide detectability prediction</summary>
         public override string ModelName => "pfly_2024_fine_tuned";
 
@@ -73,10 +74,14 @@ namespace PredictionClients.Koina.SupportedModels.FlyabilityModels
         /// <summary>Minimum allowed peptide sequence length in amino acids</summary>
         public override int MinPeptideLength => 1;
         /// <summary>Uses primary sequence for modified peptides since this model does not support modifications</summary>
-        public override IncompatibleModHandlingMode ModHandlingMode { get; init; } = IncompatibleModHandlingMode.UsePrimarySequence;
+        public override SequenceConversionHandlingMode ModHandlingMode { get; init; }
 
-        public PFly2024FineTuned(int maxNumberOfBatchesPerRequest = 500, int throttlingDelayInMilliseconds = 100)
+        public PFly2024FineTuned(SequenceConversionHandlingMode modHandlingMode = SequenceConversionHandlingMode.ReturnNull, 
+            int maxNumberOfBatchesPerRequest = 500, 
+            int throttlingDelayInMilliseconds = 100)
+            : base(Converter)
         {
+            ModHandlingMode = modHandlingMode;
             MaxNumberOfBatchesPerRequest = maxNumberOfBatchesPerRequest;
             ThrottlingDelayInMilliseconds = throttlingDelayInMilliseconds;
         }
@@ -103,28 +108,12 @@ namespace PredictionClients.Koina.SupportedModels.FlyabilityModels
         /// </remarks>
         protected override List<Dictionary<string, object>> ToBatchedRequests(List<DetectabilityPredictionInput> validInputs)
         {
-            // Split sequences into smaller batches optimized for detectability prediction
-            var batchedPeptides = validInputs.Select(p => p.ValidatedFullSequence).Chunk(MaxBatchSize).ToList();
-            var batchedRequests = new List<Dictionary<string, object>>();
-
-            for (int i = 0; i < batchedPeptides.Count; i++)
+            var batchedPeptides = validInputs.Select(p => p.ValidatedFullSequence!).Chunk(MaxBatchSize).ToArray();
+            var batchedRequests = new List<Dictionary<string, object>>(batchedPeptides.Length);
+            for (int i = 0; i < batchedPeptides.Length; i++)
             {
-                // Create API request structure following Koina specification
-                var request = new Dictionary<string, object>
-                {
-                    { "id", $"Batch{i}_" + Guid.NewGuid()}, // Unique identifier for batch tracking
-                    { "inputs", new List<object>
-                        {
-                            new {
-                                name = "peptide_sequences",           // Model input parameter name
-                                shape = new[]{ batchedPeptides[i].Length, 1 }, // Tensor shape [batch_size, 1]
-                                datatype = "BYTES",                   // String data type for sequences
-                                data = batchedPeptides[i]            // Actual sequence data
-                            },
-                        }
-                    }
-                };
-                batchedRequests.Add(request);
+                batchedRequests.Add(BuildBatchedRequest(i,
+                    new InputField("peptide_sequences", "BYTES", batchedPeptides[i])));
             }
             return batchedRequests;
         }

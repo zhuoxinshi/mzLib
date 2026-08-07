@@ -128136,6 +128136,72 @@
     <namespace>PSI-MOD</namespace>
   </term>
   <term>
+  	<id>MOD:02016</id>
+  	<name>TMTpro 16plex Tandem Mass Tag</name>
+  	<def>
+  		<defstr>TMTpro 16plex Tandem Mass Tag, an isotopic label that can be applied to the N-terminus, lysine, serine, threonine, or histidine residues. Also applies to TMTpro 18plex mass tags.</defstr>
+  		<dbxref>
+  			<acc>2016</acc>
+  			<dbname>UniMod</dbname>
+  		</dbxref>
+  	</def>
+  	<subset>PSI-MOD-slim</subset>
+  	<comment>This modification describes the isotope-labeled TMTpro Reagent with reporter m/z values for 16plex quantification. Additional reporter ions are available for 18plex. Tandem Mass Tag and TMT are registered Trademarks of Proteome Sciences plc.</comment>
+  	<synonym scope="RELATED">
+  		<synonym_text>TMTpro 16plex Tandem Mass Tag</synonym_text>
+  		<synonym_type>UniMod-description</synonym_type>
+  	</synonym>
+  	<synonym scope="EXACT">
+  		<synonym_text>TMTpro</synonym_text>
+  		<synonym_type>PSI-MOD-label</synonym_type>
+  	</synonym>
+  	<synonym scope="RELATED">
+  		<synonym_text>Tandem Mass Tag and TMT are registered Trademarks of Proteome Sciences plc.</synonym_text>
+  		<synonym_type>UniMod-alternate</synonym_type>
+  	</synonym>
+  	<synonym scope="RELATED">
+  		<synonym_text>Also applies to TMTpro 18plex mass tags</synonym_text>
+  		<synonym_type>UniMod-alternate</synonym_type>
+  	</synonym>
+  	<xref_analog>
+  		<acc></acc>
+  		<dbname>DiffFormula</dbname>
+  		<name>H(25) C(8) 13C(7) N 15N(2) O(3)</name>
+  	</xref_analog>
+  	<xref_analog>
+  		<acc></acc>
+  		<dbname>DiffMono</dbname>
+  		<name>304.207146</name>
+  	</xref_analog>
+  	<xref_analog>
+  		<acc></acc>
+  		<dbname>DiffAvg</dbname>
+  		<name>304.3127</name>
+  	</xref_analog>
+  	<xref_analog>
+  		<acc></acc>
+  		<dbname>Origin</dbname>
+  		<name>K, N-term, S, T, Y, H</name>
+  	</xref_analog>
+  	<xref_analog>
+  		<acc></acc>
+  		<dbname>Source</dbname>
+  		<name>artifact</name>
+  	</xref_analog>
+  	<xref_analog>
+  		<acc></acc>
+  		<dbname>TermSpec</dbname>
+  		<name>N-term, K, S, T, Y, H</name>
+  	</xref_analog>
+  	<xref_analog>
+  		<acc></acc>
+  		<dbname>Classification</dbname>
+  		<name>Isotopic label</name>
+  	</xref_analog>
+  	<is_a>MOD:00032</is_a>
+  	<namespace>PSI-MOD</namespace>
+  </term>
+  <term>
     <id>MOD:01716</id>
     <name>TMT6plex reporter fragment</name>
     <def>

@@ -1,11 +1,12 @@
-﻿using NUnit.Framework;
-using PredictionClients.Koina.AbstractClasses;
-using PredictionClients.Koina.Util;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using NUnit.Framework;
+using Omics.SequenceConversion;
+using PredictionClients.Koina.AbstractClasses;
+using PredictionClients.Koina.Util;
 
-namespace Test.KoinaTests
+namespace Test.KoinaTests.FragmentIntensityPrediction
 {
     /// <summary>
     /// Test harness for FragmentIntensityModel validation logic.
@@ -13,6 +14,10 @@ namespace Test.KoinaTests
     /// </summary>
     internal class TestFragmentIntensityModel : FragmentIntensityModel
     {
+        private static readonly IReadOnlySet<int> SupportedUnimodIds = new HashSet<int>();
+        private static readonly ISequenceConverter Converter = CreateUnimodConverter(
+            UnimodSequenceFormatSchema.Instance,
+            SupportedUnimodIds);
         public override string ModelName => "TestModel";
         public override int MaxBatchSize => 32;
         public override int MaxNumberOfBatchesPerRequest { get; init; } = 10;
@@ -20,7 +25,7 @@ namespace Test.KoinaTests
         public override int BenchmarkedTimeForOneMaxBatchSizeInMilliseconds => 1000;
         public override int MaxPeptideLength => 30;
         public override int MinPeptideLength => 7;
-        public override IncompatibleModHandlingMode ModHandlingMode { get; init; }
+        public override SequenceConversionHandlingMode ModHandlingMode { get; init; }
         public override IncompatibleParameterHandlingMode ParameterHandlingMode { get; init; }
         public override FragmentIonMappingMode FragmentIonMappingMode { get; init; }
 
@@ -34,15 +39,16 @@ namespace Test.KoinaTests
             HashSet<int>? allowedEnergies = null,
             HashSet<string>? allowedInstruments = null,
             HashSet<string>? allowedFragmentations = null,
-            IncompatibleModHandlingMode modHandlingMode = IncompatibleModHandlingMode.ReturnNull,
+            SequenceConversionHandlingMode modHandlingMode = SequenceConversionHandlingMode.ReturnNull,
             IncompatibleParameterHandlingMode parameterHandlingMode = IncompatibleParameterHandlingMode.ReturnNull,
             FragmentIonMappingMode fragmentIonMappingMode = FragmentIonMappingMode.MapToInputFullSequence
             )
+            : base(Converter)
         {
             AllowedPrecursorCharges = allowedCharges ?? new HashSet<int> { 2, 3, 4 };
-            AllowedCollisionEnergies = allowedEnergies ?? new HashSet<int>();
-            AllowedInstrumentTypes = allowedInstruments ?? new HashSet<string>();
-            AllowedFragmentationTypes = allowedFragmentations ?? new HashSet<string>();
+            AllowedCollisionEnergies = allowedEnergies;
+            AllowedInstrumentTypes = allowedInstruments;
+            AllowedFragmentationTypes = allowedFragmentations;
             ModHandlingMode = modHandlingMode;
             ParameterHandlingMode = parameterHandlingMode;
             FragmentIonMappingMode = fragmentIonMappingMode;

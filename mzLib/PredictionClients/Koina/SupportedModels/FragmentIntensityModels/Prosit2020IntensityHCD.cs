@@ -1,5 +1,5 @@
-﻿using Omics.SpectrumMatch;
-using System.ComponentModel;
+﻿using Omics.SequenceConversion;
+using Omics.SpectrumMatch;
 using PredictionClients.Koina.AbstractClasses;
 using PredictionClients.Koina.Util;
 
@@ -21,6 +21,9 @@ namespace PredictionClients.Koina.SupportedModels.FragmentIntensityModels
     /// </remarks>
     public class Prosit2020IntensityHCD : FragmentIntensityModel
     {
+        private static readonly IReadOnlySet<int> SupportedUnimodIds = new HashSet<int> { 35, 4 };
+        private static readonly ISequenceConverter Converter = CreateUnimodConverter(
+            UnimodSequenceFormatSchema.Instance, SupportedUnimodIds);
         /// <summary>The Koina API model name identifier</summary>
         public override string ModelName => "Prosit_2020_intensity_HCD";
 
@@ -50,37 +53,26 @@ namespace PredictionClients.Koina.SupportedModels.FragmentIntensityModels
         /// <summary>Set of supported precursor charge states for this model</summary>
         public override HashSet<int> AllowedPrecursorCharges => new() { 1, 2, 3, 4, 5, 6 };
 
-        /// <summary>Set of supported collision energies for this model
-        /// Prosit supports any collision energy, but optimal are 20, 23, 25, 28, 30, 35.
-        /// Here, we constrain to 0-100, though the model can technically handle negative and higher values. 
+        /// <summary>Set of supported collision energies for this model.
+        /// Koina accepts any FP32 collision energy value.
         /// </summary>
-        public override HashSet<int> AllowedCollisionEnergies => Enumerable.Range(0, 101).ToHashSet();
+        public override HashSet<int>? AllowedCollisionEnergies => new HashSet<int>();
 
         /// <summary>Total number of fragment ions predicted by this model per peptide</summary>
-        public int NumberOfPredictedFragmentIons => 174;
-
-        public override Dictionary<string, string> ValidModificationUnimodMapping => new()
-            {
-                {"[Common Variable:Oxidation on M]", "[UNIMOD:35]"},
-                {"[Common Fixed:Carbamidomethyl on C]", "[UNIMOD:4]"}
-            };
-
-        public override Dictionary<string, double> ValidModificationsMonoisotopicMasses => new()
-            {
-                {"[Common Variable:Oxidation on M]", 15.994915 },
-                {"[Common Fixed:Carbamidomethyl on C]", 57.021464 }
-            };
-        public override IncompatibleModHandlingMode ModHandlingMode { get; init; }
+        public override int NumberOfPredictedFragmentIons => 174;
+        public override IReadOnlySet<int> AllowedUnimodIds => SupportedUnimodIds;
+        public override SequenceConversionHandlingMode ModHandlingMode { get; init; }
         public override IncompatibleParameterHandlingMode ParameterHandlingMode { get; init; }
         public override FragmentIonMappingMode FragmentIonMappingMode { get; init; }
 
         public Prosit2020IntensityHCD(
-            IncompatibleModHandlingMode modHandlingMode = IncompatibleModHandlingMode.RemoveIncompatibleMods, 
+            SequenceConversionHandlingMode modHandlingMode = SequenceConversionHandlingMode.ReturnNull, 
             IncompatibleParameterHandlingMode parameterHandlingMode = IncompatibleParameterHandlingMode.ReturnNull,
             FragmentIonMappingMode fragmentIonMappingMode = FragmentIonMappingMode.MapToValidatedFullSequence,
             int maxNumberOfBatchesPerRequest = 250, 
             int throttlingDelayInMilliseconds = 100
             )
+            : base(Converter)
         {
             ModHandlingMode = modHandlingMode;
             ParameterHandlingMode = parameterHandlingMode;
@@ -108,45 +100,18 @@ namespace PredictionClients.Koina.SupportedModels.FragmentIntensityModels
         /// </remarks>
         protected override List<Dictionary<string, object>> ToBatchedRequests(List<FragmentIntensityPredictionInput> validInputs)
         {
-            // Split inputs into batches
-            // ValidatedFullSequence should not be null at this point due to prior validation steps
-            var batchedPeptides = validInputs.Select(p => ConvertMzLibModificationsToUnimod(p.ValidatedFullSequence!)).Chunk(MaxBatchSize).ToList();
-            var batchedCharges = validInputs.Select(p => p.PrecursorCharge).Chunk(MaxBatchSize).ToList();
-            var batchedEnergies = validInputs.Select(p => p.CollisionEnergy).Chunk(MaxBatchSize).ToList();
+            var batchedPeptides = validInputs.Select(p => p.ValidatedFullSequence!).Chunk(MaxBatchSize).ToArray();
+            var batchedCharges = validInputs.Select(p => p.PrecursorCharge).Chunk(MaxBatchSize).ToArray();
+            var batchedEnergies = validInputs.Select(p => (float)p.CollisionEnergy!).Chunk(MaxBatchSize).ToArray();
 
-            var batchedRequests = new List<Dictionary<string, object>>();
-
-            for (int i = 0; i < batchedPeptides.Count; i++)
+            var batchedRequests = new List<Dictionary<string, object>>(batchedPeptides.Length);
+            for (int i = 0; i < batchedPeptides.Length; i++)
             {
-                var request = new Dictionary<string, object>
-                    {
-                        { "id", $"Batch{i}_" + Guid.NewGuid()},
-                        { "inputs", new List<object>
-                            {
-                                new {
-                                    name = "peptide_sequences", // Model input name
-                                    shape = new[]{ batchedPeptides[i].Length, 1 }, // Tensor shape
-                                    datatype = "BYTES", // Data type for string sequences
-                                    data = batchedPeptides[i] // Actual peptide sequences
-                                },
-                                new {
-                                    name = "precursor_charges",
-                                    shape = new[]{ batchedCharges[i].Length, 1 },
-                                    datatype = "INT32", // Data type for integer charges
-                                    data = batchedCharges[i]
-                                },
-                                new {
-                                    name = "collision_energies",
-                                    shape = new[]{ batchedEnergies[i].Length, 1 },
-                                    datatype = "FP32", // Data type for floating-point energies
-                                    data = batchedEnergies[i]
-                                }
-                            }
-                        }
-                    };
-                batchedRequests.Add(request);
+                batchedRequests.Add(BuildBatchedRequest(i,
+                    new InputField("peptide_sequences", "BYTES", batchedPeptides[i]),
+                    new InputField("precursor_charges", "INT32", batchedCharges[i]),
+                    new InputField("collision_energies", "FP32", batchedEnergies[i])));
             }
-
             return batchedRequests;
         }
     }
