@@ -251,24 +251,53 @@ namespace Test
             return res;
         }
 
+        // Sum of each channel across a set of intensity vectors; zeros when there are no vectors.
+        private static double[] SumPerChannel(IEnumerable<double[]> vectors, int nCh)
+        {
+            var res = new double[nCh];
+            foreach (var v in vectors)
+                for (int i = 0; i < nCh; i++)
+                    res[i] += v[i];
+            return res;
+        }
+
         [Test]
         public static void TMT_RatioAggregation()
         {
             var dir = @"E:\Aneuploidy\Mistranslation_project\011626\042426_TMT\UPLC\MM\LFgptmdPrunedDb_search-cali-search\Task1-SearchTask";
-            var allPsms_path = @"E:\Aneuploidy\Mistranslation_project\011626\042426_TMT\UPLC\MM\LFgptmdPrunedDb_search-cali-search\Task1-SearchTask\AllPSMs_R6-R7.psmtsv";
+            var allPsms_path = @"E:\Aneuploidy\Mistranslation_project\011626\042426_TMT\UPLC\MM\LFgptmdPrunedDb_search-cali-search\Task1-SearchTask\AllPSMs_R2-R3.psmtsv";
             var allPsms_file = new PsmFromTsvFile(allPsms_path);
-
-            // 1% FDR targets with reporter ions, unambiguous protein/position (single site mapping).
-            var filteredPsms = allPsms_file.Results
-                .Where(p => p.QValue <= 0.01 && p.DecoyContamTarget == "T"
-                            && p.Intensities != null && p.Intensities.Length > 0
-                            && !string.IsNullOrEmpty(p.FullSequence) && !p.FullSequence.Contains("|")
-                            && !string.IsNullOrEmpty(p.ProteinAccession) && !p.ProteinAccession.Contains("|")
-                            && !string.IsNullOrEmpty(p.StartAndEndResiduesInProtein) && !p.StartAndEndResiduesInProtein.Contains("|"))
-                .ToList();
 
             var labels = new List<string> { "126", "127N", "127C", "128N", "128C", "129N", "129C", "130N", "130C", "131N", "131C", "132N", "132C", "133N", "133C", "134N", "134C", "135N" };
             var startEndParser = new Regex(@"\[(\d+)\s+to\s+(\d+)\]");
+            int nCh = labels.Count;
+
+            // All 1% FDR target PSMs with reporter ions (the set used for channel normalization).
+            var targetPsms = allPsms_file.Results.Where(p => p.QValue <= 0.01 && p.DecoyContamTarget == "T" && p.Intensities != null && p.Intensities.Length == nCh).ToList();
+
+            // Sample-loading normalization (before any further filtering): scale each channel so that
+            // its summed intensity across all 1% FDR target PSMs is equal across the 18 channels.
+            var channelSums = new double[nCh];
+            foreach (var p in targetPsms)
+                for (int i = 0; i < nCh; i++)
+                    channelSums[i] += p.Intensities[i];
+
+            double targetSum = channelSums.Average();   // common total to scale every channel to
+            var scale = new double[nCh];
+            for (int i = 0; i < nCh; i++)
+                scale[i] = channelSums[i] > 0 ? targetSum / channelSums[i] : 1.0;
+
+            foreach (var p in targetPsms)
+                for (int i = 0; i < nCh; i++)
+                    p.Intensities[i] *= scale[i];
+
+            // Keep unambiguous full sequences (single site mapping).
+            var filteredPsms = targetPsms
+                .Where(p => !string.IsNullOrEmpty(p.FullSequence) && !p.FullSequence.Contains("|")
+                            //&& !string.IsNullOrEmpty(p.ProteinAccession) && !p.ProteinAccession.Contains("|")
+                            //&& !string.IsNullOrEmpty(p.StartAndEndResiduesInProtein) && !p.StartAndEndResiduesInProtein.Contains("|")
+                            )
+                .ToList();
 
             // Convert each PSM's reporter intensities to within-row ratios (channel / mean of the row),
             // then record its protein span and the (protein position, mod) bio-mods it carries.
@@ -303,7 +332,7 @@ namespace Test
             // Index PSMs by accession so the span lookup only scans the relevant protein.
             var psmsByAcc = psmInfos.GroupBy(x => x.acc).ToDictionary(g => g.Key, g => g.ToList());
 
-            string outPath = Path.Combine(dir, "site_ratio_median_R6-R7.tsv");
+            string outPath = Path.Combine(dir, "Normed_site_ratio_median_R2-R3_accessionAmb_siteAmb.tsv");
             var columns = new List<string> { "Modification", "Accession", "Position", "GeneName", "NumModPsms", "NumUnmodPsms" };
             columns.AddRange(labels.Select(l => "Mod_" + l));
             columns.AddRange(labels.Select(l => "Unmod_" + l));
@@ -327,6 +356,113 @@ namespace Test
                     var outString = new List<string> { site.mod, site.acc, site.pos.ToString(), gene, modPsms.Count.ToString(), unmodPsms.Count.ToString() };
                     outString.AddRange(modMedian.Select(v => v.HasValue ? v.Value.ToString(CultureInfo.InvariantCulture) : ""));
                     outString.AddRange(unmodMedian.Select(v => v.HasValue ? v.Value.ToString(CultureInfo.InvariantCulture) : ""));
+                    writer.WriteLine(string.Join("\t", outString));
+                }
+            }
+        }
+
+        [Test]
+        public static void TMT_Occupancy() { 
+            var dir = @"E:\Aneuploidy\Mistranslation_project\011626\042426_TMT\UPLC\MM\LFgptmdPrunedDb_search-cali-search\Task1-SearchTask";
+            var allPsms_path = @"E:\Aneuploidy\Mistranslation_project\011626\042426_TMT\UPLC\MM\LFgptmdPrunedDb_search-cali-search\Task1-SearchTask\AllPSMs_R6-R7.psmtsv";
+            var allPsms_file = new PsmFromTsvFile(allPsms_path);
+
+            var labels = new List<string> { "126", "127N", "127C", "128N", "128C", "129N", "129C", "130N", "130C", "131N", "131C", "132N", "132C", "133N", "133C", "134N", "134C", "135N" };
+            var startEndParser = new Regex(@"\[(\d+)\s+to\s+(\d+)\]");
+            int nCh = labels.Count;
+
+            // All 1% FDR target PSMs with reporter ions (the set used for channel normalization).
+            var targetPsms = allPsms_file.Results.Where(p => p.QValue <= 0.01 && p.DecoyContamTarget == "T" && p.Intensities != null && p.Intensities.Length == nCh).ToList();
+
+            // Sample-loading normalization (before any further filtering): scale each channel so that
+            // its summed intensity across all 1% FDR target PSMs is equal across the 18 channels.
+            var channelSums = new double[nCh];
+            foreach (var p in targetPsms)
+                for (int i = 0; i < nCh; i++)
+                    channelSums[i] += p.Intensities[i];
+
+            double targetSum = channelSums.Average();   // common total to scale every channel to
+            var scale = new double[nCh];
+            for (int i = 0; i < nCh; i++)
+                scale[i] = channelSums[i] > 0 ? targetSum / channelSums[i] : 1.0;
+
+            foreach (var p in targetPsms)
+                for (int i = 0; i < nCh; i++)
+                    p.Intensities[i] *= scale[i];
+
+            // Keep unambiguous full sequences (single site mapping).
+            var filteredPsms = targetPsms
+                .Where(p => !string.IsNullOrEmpty(p.FullSequence) && !p.FullSequence.Contains("|")
+                            //&& !string.IsNullOrEmpty(p.ProteinAccession) && !p.ProteinAccession.Contains("|")
+                            //&& !string.IsNullOrEmpty(p.StartAndEndResiduesInProtein) && !p.StartAndEndResiduesInProtein.Contains("|")
+                            )
+                .ToList();
+
+            // Record each PSM's protein span and the (protein position, mod) bio-mods it carries.
+            // Reporter intensities are kept as (normalized) intensities — NOT converted to ratios —
+            // so they can be summed per site below.
+            var psmInfos = new List<(PsmFromTsv psm, int start, int end, string acc, string gene, HashSet<(int pos, string mod)> carried)>();
+            foreach (var psm in filteredPsms)
+            {
+                var m = startEndParser.Match(psm.StartAndEndResiduesInProtein);
+                if (!m.Success) continue;
+                int start = int.Parse(m.Groups[1].Value);
+                int end = int.Parse(m.Groups[2].Value);
+
+                // Bio-mods this PSM carries, mapped to protein positions (same formula as Occupancy).
+                var carried = new HashSet<(int pos, string mod)>();
+                foreach (var mod in SpectrumMatchFromTsv.ParseModifications(psm.FullSequence).Where(kvp => kvp.Value.Contains("Common Biological")))
+                {
+                    if (mod.Key == 0 && start != 1) continue;   // N-terminal mod only counts at protein N-term
+                    int pos = mod.Key + start;
+                    if (mod.Key != 0) pos = pos - 1;
+                    carried.Add((pos, mod.Value.Split(':')[1].Trim()));
+                }
+                psmInfos.Add((psm, start, end, psm.ProteinAccession, psm.GeneName, carried));
+            }
+
+            // Every distinct modification site = (accession, protein position, mod).
+            var sites = psmInfos.SelectMany(x => x.carried.Select(c => (acc: x.acc, pos: c.pos, mod: c.mod))).Distinct().ToList();
+
+            // Index PSMs by accession so the span lookup only scans the relevant protein.
+            var psmsByAcc = psmInfos.GroupBy(x => x.acc).ToDictionary(g => g.Key, g => g.ToList());
+
+            string outPath = Path.Combine(dir, "site_occupancy_R6-R7.tsv");
+            var columns = new List<string> { "Modification", "Accession", "Position", "GeneName", "NumModPsms", "NumUnmodPsms" };
+            columns.AddRange(labels.Select(l => "Mod_" + l));
+            columns.AddRange(labels.Select(l => "Unmod_" + l));
+            columns.AddRange(labels.Select(l => "Occupancy_" + l));
+
+            using (var writer = new StreamWriter(outPath))
+            {
+                writer.WriteLine(string.Join("\t", columns));
+                foreach (var site in sites.OrderBy(s => s.acc).ThenBy(s => s.pos).ThenBy(s => s.mod))
+                {
+                    var accPsms = psmsByAcc[site.acc];
+
+                    // PSMs carrying the mod at this site vs. PSMs spanning the site without it.
+                    var modPsms = accPsms.Where(x => x.carried.Contains((site.pos, site.mod))).ToList();
+                    var unmodPsms = accPsms.Where(x => x.start <= site.pos && site.pos <= x.end
+                                                      && !x.carried.Contains((site.pos, site.mod))).ToList();
+
+                    var gene = modPsms[0].gene;
+
+                    // Per-site quant = summed reporter intensity of its PSMs, per channel.
+                    var modSum = SumPerChannel(modPsms.Select(x => x.psm.Intensities), nCh);
+                    var unmodSum = SumPerChannel(unmodPsms.Select(x => x.psm.Intensities), nCh);
+
+                    // Occupancy per channel = modified / (modified + unmodified).
+                    var occupancy = new double[nCh];
+                    for (int i = 0; i < nCh; i++)
+                    {
+                        double total = modSum[i] + unmodSum[i];
+                        occupancy[i] = total > 0 ? modSum[i] / total : 0.0;
+                    }
+
+                    var outString = new List<string> { site.mod, site.acc, site.pos.ToString(), gene, modPsms.Count.ToString(), unmodPsms.Count.ToString() };
+                    outString.AddRange(modSum.Select(v => v.ToString(CultureInfo.InvariantCulture)));
+                    outString.AddRange(unmodSum.Select(v => v.ToString(CultureInfo.InvariantCulture)));
+                    outString.AddRange(occupancy.Select(v => v.ToString(CultureInfo.InvariantCulture)));
                     writer.WriteLine(string.Join("\t", outString));
                 }
             }
