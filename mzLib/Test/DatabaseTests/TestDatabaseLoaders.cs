@@ -1554,25 +1554,24 @@ namespace Test.DatabaseTests
 
         static string CleanPeptideSequence(string seq)
         {
-            // K.CCAADDK.E -> CCAADDK
+            // K.CCAADDK.E -> CCAADDK ; also drop modification markers like '*'
             var parts = seq.Split('.');
-            if (parts.Length == 3)
-                return parts[1];
-
-            return seq;
+            var core = parts.Length == 3 ? parts[1] : seq;
+            // keep only amino-acid letters (removes '*' and any other mod symbol)
+            return new string(core.Where(char.IsLetter).ToArray());
         }
 
         [Test]
         public static void FilterPsms()
         {
-            var reviewedAndPrunedPath = @"E:\Fly_TMT\Databases\reviewedAndPruned.fasta";
+            var reviewedAndPrunedPath = @"E:\Fly_TMT\Databases\UniProt_2026.02\2026.02_UP000000803_7227_Drosophila_melanogaster_canonical_for.fasta";
             var proteins = ProteinDbLoader.LoadProteinFasta(reviewedAndPrunedPath, true, DecoyType.None, true, out var errors);
             var mutationFile = @"E:\Fly_TMT\Databases\variant_aa_positions_uniprot_comprehensive_no_stop.txt";
             var mutationLines = File.ReadAllLines(mutationFile);
             var mutations = mutationLines.Skip(1).Select(line => new { Accession = line.Split('\t')[1], Position = int.Parse(line.Split('\t')[2]) }).ToList();
             var groupedMutations = mutations.GroupBy(m => m.Accession);
 
-            var directory = @"E:\Fly_TMT\PAW_pruned_CONT_filterPSMs\filtered_files";
+            var directory = @"E:\Fly_TMT\PAW\PAW_Db_filterPSMs\filtered_files";
             var files = Directory.GetFiles(directory, "*txt");
             foreach (var file in files)
             {
@@ -1585,6 +1584,7 @@ namespace Test.DatabaseTests
                     var parts = line.Split('\t');
                     var sequence = parts[8];
                     var loci = parts[9];
+                    if (!sequence.Contains("*")) continue;
                     var peptideSeq = CleanPeptideSequence(sequence);
                     var protein = proteins.FirstOrDefault(p => p.Accession == loci);
                     if (protein == null)
@@ -1596,7 +1596,8 @@ namespace Test.DatabaseTests
                     var startPosition = startIndex + 1; // 1-based protein position
                     var endPosition = startPosition + peptideSeq.Length - 1;
 
-                    var mutationGroup = groupedMutations.FirstOrDefault(g => g.Key == protein.Accession);
+                    var bareAccession = protein.Accession.Contains('|') ? protein.Accession.Split('|')[1]: protein.Accession;
+                    var mutationGroup = groupedMutations.FirstOrDefault(g => g.Key == bareAccession);
                     if (mutationGroup == null) continue;
                     if (mutationGroup.Any(m => m.Position >= startPosition && m.Position <= endPosition))
                     {
@@ -1630,7 +1631,7 @@ namespace Test.DatabaseTests
         [Test]
         public static void LabelingCheck()
         {
-            var path = @"E:\Aneuploidy\Mistranslation_project\011626\042426_TMT\042526_testMix_R2-R3_labelingCheck\Task1-SearchTask\AllPeptides.psmtsv";
+            var path = @"E:\PigVF\LabelingCheck\Task1-SearchTask\AllPeptides.psmtsv";
             var psmFile = new PsmFromTsvFile(path);
             var psms = psmFile.Results.Where(p => p.DecoyContamTarget == "T" && p.QValue <= 0.01).ToList();
             var incomplete = psms.Where(p => SpectrumMatchFromTsv.ParseModifications(p.FullSequence).Values.Where(v => v.Contains("TMT")).Count() != p.BaseSeq.Count(c => c == 'K') + 1).ToList();
@@ -1655,6 +1656,15 @@ namespace Test.DatabaseTests
 ;
             var proteins_correct = ProteinDbLoader.LoadProteinFasta(correct, true, DecoyType.None, true, out var errors, decoyIdentifier: "REV");
             var proteins_mine = ProteinDbLoader.LoadProteinFasta(mine, true, DecoyType.None, true, out var errors2, decoyIdentifier: "REV");
+        }
+
+        [Test]
+        public static void ConvertXmlToFasta()
+        {
+            var xmlPath = @"E:\PigVF\Databases\UP000005640_9606proteinPruned.xml";
+            var proteins = ProteinDbLoader.LoadProteinXML(xmlPath, true, DecoyType.None, new List<Modification>(), false, new List<string>(), out var errors);
+            var fastaPath = xmlPath.Replace(".xml", ".fasta");
+            ProteinDbWriter.WriteFastaDatabase(proteins, fastaPath, "");
         }
 
     }
