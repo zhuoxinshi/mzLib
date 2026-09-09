@@ -1564,14 +1564,14 @@ namespace Test.DatabaseTests
         [Test]
         public static void FilterPsms()
         {
-            var reviewedAndPrunedPath = @"E:\Fly_TMT\Databases\UniProt_2026.02\2026.02_UP000000803_7227_Drosophila_melanogaster_canonical_for.fasta";
-            var proteins = ProteinDbLoader.LoadProteinFasta(reviewedAndPrunedPath, true, DecoyType.None, true, out var errors);
+            var dbPath = @"E:\Fly_TMT\Databases\UniProt_2026.02\2026.02_UP000000803_7227_Drosophila_melanogaster_canonical_for.fasta";
+            var proteins = ProteinDbLoader.LoadProteinFasta(dbPath, true, DecoyType.None, true, out var errors);
             var mutationFile = @"E:\Fly_TMT\Databases\variant_aa_positions_uniprot_comprehensive_no_stop.txt";
             var mutationLines = File.ReadAllLines(mutationFile);
             var mutations = mutationLines.Skip(1).Select(line => new { Accession = line.Split('\t')[1], Position = int.Parse(line.Split('\t')[2]) }).ToList();
             var groupedMutations = mutations.GroupBy(m => m.Accession);
 
-            var directory = @"E:\Fly_TMT\PAW\PAW_Db_filterPSMs\filtered_files";
+            var directory = @"E:\Fly_TMT\PAW\PhilDb_BSA\filtered_files";
             var files = Directory.GetFiles(directory, "*txt");
             foreach (var file in files)
             {
@@ -1584,7 +1584,7 @@ namespace Test.DatabaseTests
                     var parts = line.Split('\t');
                     var sequence = parts[8];
                     var loci = parts[9];
-                    if (!sequence.Contains("*")) continue;
+                    
                     var peptideSeq = CleanPeptideSequence(sequence);
                     var protein = proteins.FirstOrDefault(p => p.Accession == loci);
                     if (protein == null)
@@ -1661,10 +1661,44 @@ namespace Test.DatabaseTests
         [Test]
         public static void ConvertXmlToFasta()
         {
-            var xmlPath = @"E:\PigVF\Databases\UP000005640_9606proteinPruned.xml";
-            var proteins = ProteinDbLoader.LoadProteinXML(xmlPath, true, DecoyType.None, new List<Modification>(), false, new List<string>(), out var errors);
-            var fastaPath = xmlPath.Replace(".xml", ".fasta");
-            ProteinDbWriter.WriteFastaDatabase(proteins, fastaPath, "");
+            var humanPruned = @"E:\PigVF\Databases\UP000005640_9606proteinPruned.xml";
+            var pigPruned = @"E:\PigVF\Databases\UP000008227_9823proteinPruned.xml";
+            var rat = @"E:\PigVF\Databases\uniprot-rattus_canonical-isoform_fromPruned_240Prots.fasta";
+            var phPruned = @"E:\PigVF\Databases\uniprot-rattus_canonical-isoform_fromPruned_240Prots-UP000005640_9606proteinPruned.xml";
+            var phrPruned = @"E:\PigVF\Databases\uniprot-rattus_canonical-isoform_fromPruned_240Prots-UP000005640_9606-UP000008227_9823proteinPruned.xml";
+
+            var humanProteins = ProteinDbLoader.LoadProteinXML(humanPruned, true, DecoyType.Reverse, new List<Modification>(), false, new List<string>(), out var errors, decoyIdentifier: "REV");
+            var pigProteins = ProteinDbLoader.LoadProteinXML(pigPruned, true, DecoyType.Reverse, new List<Modification>(), false, new List<string>(), out var errors2, decoyIdentifier: "REV");
+            var ratProteins = ProteinDbLoader.LoadProteinFasta(rat, true, DecoyType.Reverse, true, out var errors3, decoyIdentifier: "REV");
+            var phProteins = ProteinDbLoader.LoadProteinXML(phPruned, true, DecoyType.Reverse, new List<Modification>(), false, new List<string>(), out var errors4, decoyIdentifier: "REV");
+            var phrProteins = ProteinDbLoader.LoadProteinXML(phrPruned, true, DecoyType.Reverse, new List<Modification>(), false, new List<string>(), out var errors5, decoyIdentifier: "REV");
+
+            var pawDb = @"E:\PigVF\Databases\UniProt_2026.02\2026.02_UP000008227_9823_Sus_scrofa_canonical_both.fasta";
+            var pawProteins = ProteinDbLoader.LoadProteinFasta(pawDb, true, DecoyType.None, true, out var errors6, decoyIdentifier: "REV");
+            var contam = pawProteins.Where(p => p.Accession.Contains("CONT_")).ToList();
+            var allProteins = humanProteins.Concat(pigProteins).Concat(ratProteins).Concat(contam).Concat(phProteins).Concat(phrProteins).ToList();
+            var distinctProteins = allProteins.DistinctBy(p => CoreAccession(p.Accession)).ToList();
+
+            var outPath = @"E:\PigVF\Databases\allLFpruned_union_rat_pawContam.fasta";
+            ProteinDbWriter.WriteFastaDatabase(distinctProteins, outPath, "");
+        }
+
+        static string CoreAccession(string acc)
+        {
+            string prefix = "";
+            if (acc.StartsWith("REV_", StringComparison.Ordinal)) { prefix = "REV_"; acc = acc.Substring(4); }
+            var parts = acc.Split('|');
+            string core = (parts.Length >= 2 && (parts[0] == "sp" || parts[0] == "tr")) ? parts[1] : acc;
+            return prefix + core;
+        }
+
+        [Test]
+        public static void checkDb()
+        {
+            var org = @"E:\Fly_TMT\Databases\UniProt_2026.02\2026.02_UP000000803_7227_Drosophila_melanogaster_canonical_both.fasta";
+            var proteins = ProteinDbLoader.LoadProteinFasta(org, true, DecoyType.None, true, out var errors, decoyIdentifier: "REV");
+            var updated = @"E:\Fly_TMT\Databases\UniProt_2026.02\2026.02_UP000000803_7227_Drosophila_melanogaster_canonical_both_plusMissingCONT.fasta";
+            var updatedProteins = ProteinDbLoader.LoadProteinFasta(updated, true, DecoyType.None, true, out var errors2, decoyIdentifier: "REV");
         }
 
     }
