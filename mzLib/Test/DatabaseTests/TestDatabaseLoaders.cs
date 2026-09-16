@@ -1613,11 +1613,11 @@ namespace Test.DatabaseTests
         [Test]
         public static void TIC()
         {
-            var directory = @"E:\ISD Project\071626_ISD\Quant\HC_YC";
-            var islet_dir = @"E:\Islets\Brian_data\Real_islets\Frxn";
-            var standard = @"E:\Aneuploidy\Mistranslation_project\011626\040326_IS_test\04-14-26_std-YL.raw";
-            var files = Directory.GetFiles(directory, "07-23-26_HC-YC_1-1*").ToList();
-            var fileList2 = new List<string> { @"E:\Aneuploidy\Mistranslation_project\011626\061226_TMT2\06-16-26_TMT2_R2-R3_testMix.raw", @"E:\Aneuploidy\Mistranslation_project\011626\061226_TMT2\06-17-26_TMT2_R5-R6_testMix.raw" };
+            var directory = @"E:\ISD Project\071626_ISD\Quant\HCD_YBC";
+            //var islet_dir = @"E:\Islets\Brian_data\Real_islets\Frxn";
+            //var standard = @"E:\Aneuploidy\Mistranslation_project\011626\040326_IS_test\04-14-26_std-YL.raw";
+            var files = Directory.GetFiles(directory, "*HCD-YBC_1-*").Where(f => f.Contains("DDA") || f.Contains("labelCorrected")).ToList();
+            //var fileList2 = new List<string> { @"E:\Aneuploidy\Mistranslation_project\011626\061226_TMT2\06-16-26_TMT2_R2-R3_testMix.raw", @"E:\Aneuploidy\Mistranslation_project\011626\061226_TMT2\06-17-26_TMT2_R5-R6_testMix.raw" };
             var ticAreas = new Dictionary<string, string>();
             //files.Add(standard);
             foreach (var file in files)
