@@ -1502,9 +1502,9 @@ namespace Test.DatabaseTests
         [Test]
         public static void AddDecoys()
         {
-            var proteinsAndContaminantsPath = @"E:\Aneuploidy\Database\YPS1009-protein-ALL_3-2026_plusCONT.fasta";
+            var proteinsAndContaminantsPath = @"E:\PigVF\Databases\allLFpruned_union_plusThermoContam_target.fasta";
             var proteins = ProteinDbLoader.LoadProteinFasta(proteinsAndContaminantsPath, true, DecoyType.Reverse, true, out var errors, decoyIdentifier: "REV");
-            var proteinsAndContaminantsAndREVPath = proteinsAndContaminantsPath.Replace(".fasta", "_REV.fasta");
+            var proteinsAndContaminantsAndREVPath = proteinsAndContaminantsPath.Replace(".fasta", "_decoyREV.fasta");
             ProteinDbWriter.WriteFastaDatabase(proteins, proteinsAndContaminantsAndREVPath, " ");
         }
 
@@ -1667,6 +1667,13 @@ namespace Test.DatabaseTests
             var phPruned = @"E:\PigVF\Databases\uniprot-rattus_canonical-isoform_fromPruned_240Prots-UP000005640_9606proteinPruned.xml";
             var phrPruned = @"E:\PigVF\Databases\uniprot-rattus_canonical-isoform_fromPruned_240Prots-UP000005640_9606-UP000008227_9823proteinPruned.xml";
 
+            var humanDb = @"E:\PigVF\Databases\UP000005640_9606.fasta";
+            var pigDb = @"E:\PigVF\Databases\UP000008227_9823.fasta";
+            var ratDb = @"E:\PigVF\Databases\UP000002494_10116.fasta";
+            var humanUniProt = ProteinDbLoader.LoadProteinFasta(humanDb, true, DecoyType.Reverse, true, out var errors0, decoyIdentifier: "REV");
+            var pigUniProt = ProteinDbLoader.LoadProteinFasta(pigDb, true, DecoyType.Reverse, true, out var errors1, decoyIdentifier: "REV");
+            var ratUniProt = ProteinDbLoader.LoadProteinFasta(ratDb, true, DecoyType.Reverse, true, out var errors21, decoyIdentifier: "REV");
+
             var humanProteins = ProteinDbLoader.LoadProteinXML(humanPruned, true, DecoyType.Reverse, new List<Modification>(), false, new List<string>(), out var errors, decoyIdentifier: "REV");
             var pigProteins = ProteinDbLoader.LoadProteinXML(pigPruned, true, DecoyType.Reverse, new List<Modification>(), false, new List<string>(), out var errors2, decoyIdentifier: "REV");
             var ratProteins = ProteinDbLoader.LoadProteinFasta(rat, true, DecoyType.Reverse, true, out var errors3, decoyIdentifier: "REV");
@@ -1682,6 +1689,59 @@ namespace Test.DatabaseTests
             var outPath = @"E:\PigVF\Databases\allLFpruned_union_rat_pawContam.fasta";
             ProteinDbWriter.WriteFastaDatabase(distinctProteins, outPath, "");
         }
+
+        [Test]
+        public static void ConvertXmlToFasta2()
+        {
+            var humanPruned = @"E:\PigVF\Databases\UP000005640_9606proteinPruned.xml";
+            var pigPruned = @"E:\PigVF\Databases\UP000008227_9823proteinPruned.xml";
+            var ratPruned = @"E:\PigVF\Databases\uniprot-rattus_canonical-isoform_fromPruned_240Prots.fasta";
+            var phPruned = @"E:\PigVF\Databases\uniprot-rattus_canonical-isoform_fromPruned_240Prots-UP000005640_9606proteinPruned.xml";
+            var phrPruned = @"E:\PigVF\Databases\uniprot-rattus_canonical-isoform_fromPruned_240Prots-UP000005640_9606-UP000008227_9823proteinPruned.xml";
+            var thermoContam = @"E:\PigVF\Databases\Thermo_contams.fasta";
+
+            var humanDb = @"E:\PigVF\Databases\UP000005640_9606.fasta";
+            var pigDb = @"E:\PigVF\Databases\UP000008227_9823.fasta";
+            var ratDb = @"E:\PigVF\Databases\UP000002494_10116.fasta";
+
+            // regexes needed so the WRITTEN entry has a clean Accession + mnemonic Name + OS/GN
+            List<Protein> LoadUniProt(string path) => ProteinDbLoader.LoadProteinFasta(
+                path, true, DecoyType.None, false, out _,
+                ProteinDbLoader.UniprotAccessionRegex, ProteinDbLoader.UniprotFullNameRegex,
+                ProteinDbLoader.UniprotNameRegex, ProteinDbLoader.UniprotGeneNameRegex,
+                ProteinDbLoader.UniprotOrganismRegex);
+
+            var ratPrunedProteins = LoadUniProt(ratPruned);
+
+            // index the UniProt DBs by CoreAccession
+            var uniprot = LoadUniProt(humanDb).Concat(LoadUniProt(pigDb)).Concat(LoadUniProt(ratDb)).Concat(ratPrunedProteins)
+                .GroupBy(p => CoreAccession(p.Accession))
+                .ToDictionary(g => g.Key, g => g.First());
+
+            // gather pruned accessions (CoreAccession-normalized)
+            var accessions = new HashSet<string>();
+            foreach (var xml in new[] { humanPruned, pigPruned, phPruned, phrPruned })
+                foreach (var p in ProteinDbLoader.LoadProteinXML(xml, true, DecoyType.None, new List<Modification>(), false, new List<string>(), out _))
+                    accessions.Add(CoreAccession(p.Accession));
+            foreach (var p in ratPrunedProteins)
+                accessions.Add(CoreAccession(p.Accession));
+
+            // add the UniProt version of each pruned protein
+            var proteins = accessions.Where(uniprot.ContainsKey).Select(a => uniprot[a]).ToList();
+
+            var contamAcc = new FastaHeaderFieldRegex("accession", @">(CONT_[^|\s]+)", 0, 1);   // -> CONT_001
+            var contamName = new FastaHeaderFieldRegex("name", @">[^|]+\|([^|\s]+)", 0, 1); // -> Trypa1 (2nd field)
+            var contamFull = new FastaHeaderFieldRegex("fullName", @"^>\S+\s+(.+)", 0, 1);      // -> description
+            var contamProteins = ProteinDbLoader.LoadProteinFasta(thermoContam, true, DecoyType.None, false, out _,
+                contamAcc, contamFull, contamName, null, null); 
+            
+            var proteinsAndContam = proteins.Concat(contamProteins).ToList();
+            var proteinsAndContamAndReverse = DecoyProteinGenerator.GenerateDecoys(proteinsAndContam, DecoyType.Reverse, -1, "REV");
+            var both = proteinsAndContam.Concat(proteinsAndContamAndReverse).ToList();
+
+            ProteinDbWriter.WriteFastaDatabase(both, @"E:\PigVF\Databases\allLFpruned_union_plusThermoContam_target_decoyREV.fasta", "");
+        }
+
 
         static string CoreAccession(string acc)
         {

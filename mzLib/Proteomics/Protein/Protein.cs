@@ -303,7 +303,20 @@ namespace Proteomics
             var n = GeneNames.FirstOrDefault();
             string geneName = n == null ? "" : n.Item2;
 
-            return string.Format("mz|{0}|{1} {2} OS={3} GN={4}", Accession, Name, FullName, Organism, geneName);
+            // The FASTA identifier is parsed by downstream tools (Comet, PAW, etc.) as the
+            // text up to the first whitespace, so the entry-name slot must contain no space,
+            // comma, or pipe. When the fasta was loaded with the UniProt regexes, Name holds
+            // the mnemonic (e.g. K1C14_HUMAN) and is safe to use; but if Name holds a free-text
+            // description (e.g. "Keratin, type I cytoskeletal 14"), placing it here drags a
+            // space/comma into the identifier and corrupts comma-delimited parsing (e.g. PAW
+            // protein grouping). So prefer the mnemonic (Name), then gene name, then accession,
+            // and keep the full description after the first space:
+            // db|Accession|EntryName ProteinName OS=... GN=...
+            bool IsSafeToken(string s) => !string.IsNullOrWhiteSpace(s) && s.IndexOfAny(new[] { ' ', '\t', ',', '|' }) < 0;
+            string entryName = IsSafeToken(Name) ? Name : (IsSafeToken(geneName) ? geneName : Accession);
+            string description = string.IsNullOrWhiteSpace(FullName) ? Name : FullName;
+
+            return string.Format("mz|{0}|{1} {2} OS={3} GN={4}", Accession, entryName, description, Organism, geneName);
         }
 
         /// <summary>
