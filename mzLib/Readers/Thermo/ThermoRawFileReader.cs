@@ -252,6 +252,7 @@ namespace Readers
             string HcdEnergy = null;
             string scanDescript = null;
             double? compensationVoltage = null; 
+            bool faimsVoltageOff = false;
             ActivationType activationType = ActivationType.Any; // thermo enum
             DissociationType dissociationType = DissociationType.Unknown; // mzLib enum
 
@@ -286,6 +287,11 @@ namespace Readers
                 if (labels[i].StartsWith("FAIMS CV", StringComparison.Ordinal))
                 {
                     compensationVoltage = double.Parse(values[i]); 
+                }
+                // instruments with a FAIMS interface write "FAIMS CV: 0.000" even when FAIMS is off
+                if (labels[i].StartsWith("FAIMS Voltage On", StringComparison.Ordinal))
+                {
+                    faimsVoltageOff = values[i].Trim().Equals("No", StringComparison.OrdinalIgnoreCase);
                 }
 
                 if (msOrder < 2)
@@ -399,8 +405,11 @@ namespace Readers
                     }
                 }
             }
-            
-            
+
+            if (faimsVoltageOff)
+            {
+                compensationVoltage = null;
+            }
 
             return new MsDataScan(
                 massSpectrum: spectrum,

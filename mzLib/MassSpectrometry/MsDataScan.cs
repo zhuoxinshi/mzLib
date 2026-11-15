@@ -104,7 +104,9 @@ namespace MassSpectrometry
         public MzSpectrum MassSpectrum { get; protected set; }
 
         public int OneBasedScanNumber { get; protected set; }
-        public int MsnOrder { get; private set; }
+        // MsnOrder, SelectedIonMZ and IsolationWidth are publicly settable so that ISD scans recorded
+        // as MS1 can be relabeled as MS2 (see ISD.LabelCorrection)
+        public int MsnOrder { get; set; }
         public double RetentionTime { get; }
         public Polarity Polarity { get; }
         public MZAnalyzerType MzAnalyzer { get; }
@@ -121,9 +123,9 @@ namespace MassSpectrometry
 
         public int? SelectedIonChargeStateGuess { get; }
         public double? SelectedIonIntensity { get; private set; } // May be refined
-        public double? SelectedIonMZ { get; private set; } // May be adjusted by calibration
+        public double? SelectedIonMZ { get; set; } // May be adjusted by calibration
         public DissociationType? DissociationType { get; }
-        public double? IsolationWidth { get; }
+        public double? IsolationWidth { get; set; }
         public int? OneBasedPrecursorScanNumber { get; protected set; }
         public double? SelectedIonMonoisotopicGuessIntensity { get; private set; } // May be refined
         public double? SelectedIonMonoisotopicGuessMz { get; private set; } // May be refined
